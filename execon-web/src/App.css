@@ -1,0 +1,42 @@
+/* Tablas de estilo empresarial */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 0.78rem !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  color: #64748B !important;
+  background-color: #F8FAFC !important;
+}
+
+td {
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.84rem !important;
+  color: #334155 !important;
+  border-bottom: 1px solid #EEF2F6 !important;
+}
+
+tr:hover td {
+  background-color: #F8FBFF !important;
+}
+
+/* Microinteracciones limpias para botones y tarjetas */
+button {
+  font-family: 'Inter', sans-serif !important;
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-interactive {
+  transition: transform 120ms ease-in-out, box-shadow 120ms ease-in-out, border-color 120ms ease-in-out;
+}
+
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 51, 89, 0.08);
+}
