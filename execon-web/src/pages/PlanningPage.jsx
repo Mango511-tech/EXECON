@@ -1,25 +1,26 @@
 import {
   CalendarMonthOutlined,
-  CheckCircleOutlined,
+  ChevronLeft,
+  ChevronRight,
   DownloadOutlined,
   EventAvailableOutlined,
   EventBusyOutlined,
-  InfoOutlined,
+  InboxOutlined,
   WorkOutlineOutlined,
 } from '@mui/icons-material';
 
 import {
   Alert,
+  Avatar,
   Box,
   Button,
+  Chip,
   CircularProgress,
   FormControl,
-  FormControlLabel,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
-  Radio,
-  RadioGroup,
   Select,
   Stack,
   TextField,
@@ -45,19 +46,66 @@ const EMPTY_FORM = {
 };
 
 const MONTHS = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
+
+/* ---------- Tokens del sistema de diseño ---------- */
+const T = {
+  bg: '#F1F5F9',
+  border: '#E2E8F0',
+  text: '#0F172A',
+  text2: '#475569',
+  text3: '#94A3B8',
+  primary: '#003359',
+  link: '#155E9C',
+  head: '#F8FAFC',
+  seg: '#EEF2F6',
+  vac: '#1D6FB8',
+  proj: '#F59E0B',
+  red: '#C0392B',
+};
+
+const cardSx = {
+  bgcolor: '#FFFFFF',
+  border: `1px solid ${T.border}`,
+  borderRadius: 2.5,
+  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+  overflow: 'hidden',
+};
+
+const labelSx = {
+  display: 'block',
+  mb: 0.75,
+  color: T.text3,
+  fontSize: '0.66rem',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+};
+
+const inputSx = {
+  '& .MuiOutlinedInput-root': {
+    minHeight: 44,
+    borderRadius: 2,
+    bgcolor: '#FFFFFF',
+    fontSize: '0.86rem',
+    '& fieldset': { borderColor: T.border },
+    '&:hover fieldset': { borderColor: '#CBD5E1' },
+    '&.Mui-focused fieldset': { borderColor: T.primary },
+  },
+};
+
+const outlineBtnSx = {
+  minHeight: 38,
+  borderColor: T.border,
+  borderRadius: 2,
+  color: T.text2,
+  textTransform: 'none',
+  fontSize: '0.8rem',
+  fontWeight: 700,
+  '&:hover': { borderColor: T.primary, bgcolor: T.head },
+};
 
 function PlanningPage() {
   const [agents, setAgents] = useState([]);
@@ -424,13 +472,18 @@ function PlanningPage() {
     return {
       startIndex,
       duration,
+      label: `${visibleStart.format('DD')}–${visibleEnd.format('DD MMM')}`,
     };
   };
 
+  const todayColumn = dayjs().isSame(calendarDate, 'month')
+    ? dayjs().date()
+    : null;
+
   return (
     <DashboardLayout>
-      <Box sx={{ pb: 3 }}>
-        {/* TARJETAS SUPERIORES */}
+      <Box sx={{ pt: 1, pb: 3 }}>
+        {/* KPIs CON ANIMACIÓN DE ELEVACIÓN Y SOMBRA */}
         <Box
           sx={{
             display: 'grid',
@@ -439,241 +492,205 @@ function PlanningPage() {
               sm: 'repeat(2, minmax(0, 1fr))',
               xl: 'repeat(3, minmax(0, 1fr))',
             },
-            gap: 1.5,
-            mb: 1.5,
+            gap: 2,
+            mb: 3,
           }}
         >
           <PlanningMetricCard
             icon={<WorkOutlineOutlined />}
             label="En proyecto esta semana"
             value={summary.projectsThisWeek}
-            color="#168A4A"
-            background="#ECFDF3"
+            subtitle="Asignaciones activas"
+            color="#6D5BD0"
+            background="#EFEDFA"
           />
 
           <PlanningMetricCard
             icon={<EventBusyOutlined />}
             label="En vacaciones este mes"
             value={summary.vacationsThisMonth}
-            color="#1674B7"
-            background="#EAF4FF"
+            subtitle={`${MONTHS[calendarDate.month()]} ${calendarDate.year()}`}
+            color="#1D6FB8"
+            background="#EAF2FA"
           />
 
           <PlanningMetricCard
             icon={<CalendarMonthOutlined />}
             label="Total días fuera"
             value={summary.totalDaysOut}
-            color="#6A45B5"
-            background="#F3EEFF"
+            subtitle="Acumulado del mes"
+            color="#0E9F6E"
+            background="#E9F9F1"
           />
         </Box>
 
-        {/* FORMULARIO */}
+        {/* FORMULARIO DE REGISTRO */}
         <Paper
           component="form"
           onSubmit={handleSavePlanning}
-          sx={{
-            p: 2.25,
-            mb: 1.5,
-            border: '1px solid #E7EDF4',
-            borderRadius: 1.5,
-          }}
+          elevation={0}
+          sx={{ ...cardSx, mb: 3.5 }}
         >
-          <Typography
-            sx={{
-              mb: 1.75,
-              color: '#173B66',
-              fontSize: '1.1rem',
-              fontWeight: 800,
-            }}
-          >
-            Registro de vacaciones y proyectos
-          </Typography>
+          <CardHead title="Registro de vacaciones y proyectos" />
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: 'minmax(220px, 0.9fr) minmax(280px, 1.1fr) minmax(280px, 1fr)',
-              },
-              gap: 1.5,
-              alignItems: 'end',
-            }}
-          >
-            <FormControl
-              fullWidth
-              size="small"
-              disabled={loadingAgents || savingPlanning}
-            >
-              <InputLabel id="planning-agent-label">ISM/MESA</InputLabel>
-              <Select
-                labelId="planning-agent-label"
-                value={form.agente}
-                label="ISM/MESA"
-                onChange={(event) =>
-                  handleFormChange('agente', event.target.value)
-                }
-                sx={{
-                  minHeight: 48,
-                  fontSize: '0.9rem',
-                }}
-              >
-                {loadingAgents ? (
-                  <MenuItem value="" disabled>
-                    Cargando ISM/MESA...
-                  </MenuItem>
-                ) : agents.length === 0 ? (
-                  <MenuItem value="" disabled>
-                    No hay ISM/MESA disponibles
-                  </MenuItem>
-                ) : (
-                  agents.map((agent) => (
-                    <MenuItem
-                      key={agent.id}
-                      value={String(agent.id)}
-                      sx={{ fontSize: '0.9rem' }}
-                    >
-                      {agent.nombre}
-                    </MenuItem>
-                  ))
-                )}
-              </Select>
-            </FormControl>
-
-            <FormControl
-              component="fieldset"
-              disabled={savingPlanning}
-              sx={{ px: 0.5 }}
-            >
-              <Typography
-                sx={{
-                  mb: 0.7,
-                  color: '#475569',
-                  fontSize: '0.9rem',
-                  fontWeight: 800,
-                }}
-              >
-                Tipo
-              </Typography>
-              <RadioGroup
-                row
-                value={form.tipo}
-                onChange={(event) =>
-                  handleFormChange('tipo', event.target.value)
-                }
-                sx={{
-                  minHeight: 48,
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'nowrap',
-                  gap: 1,
-                }}
-              >
-                <FormControlLabel
-                  value="VACACIONES"
-                  control={<Radio size="small" />}
-                  label="Vacaciones"
-                  sx={{
-                    m: 0,
-                    '& .MuiFormControlLabel-label': {
-                      color: '#475569',
-                      fontSize: '0.9rem',
-                      fontWeight: 700,
-                    },
-                  }}
-                />
-                <FormControlLabel
-                  value="PROYECTO"
-                  control={<Radio size="small" />}
-                  label="En proyecto"
-                  sx={{
-                    m: 0,
-                    '& .MuiFormControlLabel-label': {
-                      color: '#475569',
-                      fontSize: '0.9rem',
-                      fontWeight: 700,
-                    },
-                  }}
-                />
-              </RadioGroup>
-            </FormControl>
-
-            <TextField
-              label="Comentario"
-              placeholder="Escribe un comentario opcional"
-              value={form.comentario}
-              onChange={(event) =>
-                handleFormChange('comentario', event.target.value)
-              }
-              fullWidth
-              size="small"
-              disabled={savingPlanning}
+          <Box sx={{ p: 2.5 }}>
+            <Box
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  minHeight: 48,
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  md: '1.2fr 1fr 1.4fr',
                 },
-                '& .MuiInputBase-input': {
-                  fontSize: '0.9rem',
-                },
-              }}
-            />
-          </Box>
-
-          <Box
-            sx={{
-              mt: 1.6,
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, minmax(0, 1fr))',
-                lg: 'minmax(260px, 1fr) minmax(260px, 1fr) auto',
-              },
-              gap: 1.5,
-              alignItems: 'end',
-            }}
-          >
-            <DateField
-              label="Fecha inicio"
-              value={form.fechaInicio}
-              disabled={savingPlanning}
-              onChange={(value) => handleFormChange('fechaInicio', value)}
-            />
-
-            <DateField
-              label="Fecha fin"
-              value={form.fechaFin}
-              disabled={savingPlanning}
-              onChange={(value) => handleFormChange('fechaFin', value)}
-            />
-
-            <Button
-              type="submit"
-              variant="contained"
-              startIcon={
-                savingPlanning ? (
-                  <CircularProgress size={18} color="inherit" />
-                ) : (
-                  <EventAvailableOutlined />
-                )
-              }
-              disabled={loadingAgents || savingPlanning}
-              sx={{
-                minHeight: 48,
-                minWidth: 210,
-                px: 2.25,
-                bgcolor: '#003359',
-                textTransform: 'none',
-                fontSize: '0.9rem',
-                fontWeight: 800,
-                whiteSpace: 'nowrap',
-                '&:hover': {
-                  bgcolor: '#002642',
-                },
+                gap: 2,
+                alignItems: 'end',
               }}
             >
-              {savingPlanning ? 'Guardando...' : 'Guardar registro'}
-            </Button>
+              <Box>
+                <Typography sx={labelSx}>ISM / MESA</Typography>
+                <FormControl
+                  fullWidth
+                  size="small"
+                  disabled={loadingAgents || savingPlanning}
+                >
+                  <InputLabel id="planning-agent-label" shrink={false} sx={{ display: 'none' }}>
+                    ISM/MESA
+                  </InputLabel>
+                  <Select
+                    labelId="planning-agent-label"
+                    value={form.agente}
+                    displayEmpty
+                    onChange={(event) =>
+                      handleFormChange('agente', event.target.value)
+                    }
+                    renderValue={(selected) => {
+                      if (!selected) {
+                        return (
+                          <Typography sx={{ color: T.text3, fontSize: '0.86rem' }}>
+                            Selecciona un ISM/MESA
+                          </Typography>
+                        );
+                      }
+                      const found = agents.find((a) => String(a.id) === String(selected));
+                      return (
+                        <Typography sx={{ color: T.text, fontSize: '0.86rem', fontWeight: 600 }}>
+                          {found?.nombre || selected}
+                        </Typography>
+                      );
+                    }}
+                    sx={{
+                      minHeight: 44,
+                      borderRadius: 2,
+                      fontSize: '0.86rem',
+                      '& fieldset': { borderColor: T.border },
+                    }}
+                  >
+                    {loadingAgents ? (
+                      <MenuItem value="" disabled>
+                        Cargando ISM/MESA...
+                      </MenuItem>
+                    ) : agents.length === 0 ? (
+                      <MenuItem value="" disabled>
+                        No hay ISM/MESA disponibles
+                      </MenuItem>
+                    ) : (
+                      agents.map((agent) => (
+                        <MenuItem
+                          key={agent.id}
+                          value={String(agent.id)}
+                          sx={{ fontSize: '0.86rem' }}
+                        >
+                          {agent.nombre}
+                        </MenuItem>
+                      ))
+                    )}
+                  </Select>
+                </FormControl>
+              </Box>
+
+              <Box>
+                <Typography sx={labelSx}>Tipo de registro</Typography>
+                <SegmentedControl
+                  value={form.tipo}
+                  disabled={savingPlanning}
+                  onChange={(value) => handleFormChange('tipo', value)}
+                  options={[
+                    { value: 'VACACIONES', label: 'Vacaciones' },
+                    { value: 'PROYECTO', label: 'En proyecto' },
+                  ]}
+                />
+              </Box>
+
+              <Box>
+                <Typography sx={labelSx}>Comentario</Typography>
+                <TextField
+                  placeholder="Motivo o referencia del periodo…"
+                  value={form.comentario}
+                  onChange={(event) =>
+                    handleFormChange('comentario', event.target.value)
+                  }
+                  fullWidth
+                  size="small"
+                  disabled={savingPlanning}
+                  sx={inputSx}
+                />
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                mt: 2,
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  lg: 'minmax(220px, 1fr) minmax(220px, 1fr) auto',
+                },
+                gap: 2,
+                alignItems: 'end',
+              }}
+            >
+              <DateField
+                label="Fecha inicio"
+                value={form.fechaInicio}
+                disabled={savingPlanning}
+                onChange={(value) => handleFormChange('fechaInicio', value)}
+              />
+
+              <DateField
+                label="Fecha fin"
+                value={form.fechaFin}
+                disabled={savingPlanning}
+                onChange={(value) => handleFormChange('fechaFin', value)}
+              />
+
+              <Button
+                type="submit"
+                variant="contained"
+                disableElevation
+                startIcon={
+                  savingPlanning ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <EventAvailableOutlined />
+                  )
+                }
+                disabled={loadingAgents || savingPlanning}
+                sx={{
+                  minHeight: 44,
+                  minWidth: 200,
+                  px: 2.5,
+                  borderRadius: 2,
+                  bgcolor: T.primary,
+                  textTransform: 'none',
+                  fontSize: '0.86rem',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  '&:hover': { bgcolor: '#002642' },
+                }}
+              >
+                {savingPlanning ? 'Guardando...' : 'Guardar registro'}
+              </Button>
+            </Box>
           </Box>
         </Paper>
 
@@ -681,182 +698,153 @@ function PlanningPage() {
           <Alert
             severity={message.severity}
             onClose={() => setMessage(null)}
-            sx={{ mb: 1.5, fontSize: '0.9rem' }}
+            sx={{ mb: 2.5, borderRadius: 2.5, fontSize: '0.86rem' }}
           >
             {message.text}
           </Alert>
         )}
 
-        {/* CALENDARIO */}
-        <Paper
-          sx={{
-            mb: 1.5,
-            border: '1px solid #E7EDF4',
-            borderRadius: 1.5,
-            overflow: 'hidden',
-          }}
-        >
+        {/* CALENDARIO CON ENCABEZADO 100% ALINEADO */}
+        <Paper elevation={0} sx={{ ...cardSx, mb: 3.5 }}>
           <Box
             sx={{
-              px: 2,
-              py: 1.4,
+              px: 2.5,
+              minHeight: 64,
               display: 'flex',
-              flexDirection: { xs: 'column', md: 'row' },
-              alignItems: { xs: 'stretch', md: 'center' },
+              alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 1.25,
-              borderBottom: '1px solid #E7EDF4',
+              flexWrap: 'wrap',
+              gap: 2,
+              borderBottom: `1px solid ${T.border}`,
             }}
           >
+            {/* Título de la tarjeta */}
             <Typography
               sx={{
-                color: '#173B66',
-                fontSize: '1.1rem',
+                color: T.text,
+                fontSize: '0.8rem',
                 fontWeight: 800,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                lineHeight: 1,
               }}
             >
               Calendario de disponibilidad
             </Typography>
 
-            <Stack
-              direction="row"
-              spacing={1.5}
-              alignItems="center"
-              justifyContent={{ xs: 'space-between', md: 'flex-end' }}
-            >
-              <LegendItem color="#EAF7EF" label="Disponible" />
-              <LegendItem color="#1A73E8" label="Vacaciones" />
-              <LegendItem color="#F6AA61" label="Proyecto" />
-            </Stack>
-          </Box>
-
-          <Box sx={{ p: 2 }}>
-            <Stack
-              direction="row"
-              spacing={0.9}
-              alignItems="center"
-              sx={{ mb: 1.25 }}
-            >
-              <Button
+            {/* Selector de mes al centro */}
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconButton
                 size="small"
                 disabled={loadingPlanning}
                 onClick={() => changeCalendarMonth('PREV')}
-                sx={{
-                  minWidth: 36,
-                  minHeight: 38,
-                  color: '#64748B',
-                  fontSize: '1rem',
-                  textTransform: 'none',
-                }}
+                sx={{ border: `1px solid ${T.border}`, borderRadius: 2, width: 32, height: 32 }}
               >
-                ‹
-              </Button>
+                <ChevronLeft fontSize="small" />
+              </IconButton>
 
               <Typography
                 sx={{
-                  minWidth: 170,
-                  color: '#334155',
-                  fontSize: '0.92rem',
+                  minWidth: 155,
+                  color: T.text,
+                  fontSize: '0.86rem',
                   fontWeight: 800,
-                  textTransform: 'capitalize',
                   textAlign: 'center',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  lineHeight: 1,
                 }}
               >
                 {MONTHS[calendarDate.month()]} {calendarDate.year()}
               </Typography>
 
-              <Button
+              <IconButton
                 size="small"
                 disabled={loadingPlanning}
                 onClick={() => changeCalendarMonth('NEXT')}
-                sx={{
-                  minWidth: 36,
-                  minHeight: 38,
-                  color: '#64748B',
-                  fontSize: '1rem',
-                  textTransform: 'none',
-                }}
+                sx={{ border: `1px solid ${T.border}`, borderRadius: 2, width: 32, height: 32 }}
               >
-                ›
-              </Button>
+                <ChevronRight fontSize="small" />
+              </IconButton>
 
               <Button
                 size="small"
+                variant="outlined"
                 disabled={loadingPlanning}
                 onClick={resetToToday}
-                sx={{
-                  ml: 0.5,
-                  minWidth: 52,
-                  minHeight: 38,
-                  px: 1,
-                  color: '#64748B',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: 0.7,
-                  fontSize: '0.8rem',
-                  textTransform: 'none',
-                }}
+                sx={{ ...outlineBtnSx, minHeight: 32, px: 1.5, ml: 0.5 }}
               >
                 Hoy
               </Button>
             </Stack>
 
-            <Box sx={{ overflowX: 'auto' }}>
+            {/* Leyenda a la derecha con spacing limpio */}
+            <Stack direction="row" spacing={3} alignItems="center">
+              <LegendItem color={T.vac} label="Vacaciones" />
+              <LegendItem color={T.proj} label="Proyecto" />
+              <LegendItem color={T.red} label="Hoy" />
+            </Stack>
+          </Box>
+
+          <Box sx={{ p: 2, overflowX: 'auto' }}>
+            <Box
+              sx={{
+                minWidth: 980,
+                border: `1px solid ${T.border}`,
+                borderRadius: 2,
+                overflow: 'hidden',
+              }}
+            >
+              {/* Cabecera de días */}
               <Box
                 sx={{
-                  minWidth: 980,
-                  borderTop: '1px solid #E7EDF4',
-                  borderLeft: '1px solid #E7EDF4',
+                  display: 'grid',
+                  gridTemplateColumns: `180px repeat(${calendarDays.length}, minmax(30px, 1fr))`,
+                  bgcolor: T.head,
+                  borderBottom: `1px solid ${T.border}`,
                 }}
               >
-                {/* Cabecera de Días */}
                 <Box
                   sx={{
-                    display: 'grid',
-                    gridTemplateColumns: `180px repeat(${calendarDays.length}, minmax(30px, 1fr))`,
+                    px: 1.75,
+                    py: 1.1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRight: `1px solid ${T.border}`,
                   }}
                 >
-                  <Box
+                  <Typography
                     sx={{
-                      minHeight: 48,
-                      display: 'flex',
-                      alignItems: 'center',
-                      px: 1.5,
-                      bgcolor: '#F7F9FC',
-                      borderRight: '1px solid #E7EDF4',
-                      borderBottom: '1px solid #E7EDF4',
+                      color: T.text3,
+                      fontSize: '0.66rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
                     }}
                   >
-                    <Typography
-                      sx={{
-                        color: '#64748B',
-                        fontSize: '0.74rem',
-                        fontWeight: 800,
-                      }}
-                    >
-                      ISM/MESA
-                    </Typography>
-                  </Box>
+                    ISM / MESA
+                  </Typography>
+                </Box>
 
-                  {calendarDays.map((day) => (
+                {calendarDays.map((day) => {
+                  const isWeekend = day.day() === 0 || day.day() === 6;
+                  const isToday = day.isSame(dayjs(), 'day');
+
+                  return (
                     <Box
                       key={day.format('YYYY-MM-DD')}
                       sx={{
-                        minHeight: 48,
+                        py: 1,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        bgcolor:
-                          day.day() === 0 || day.day() === 6
-                            ? '#FAFCFE'
-                            : '#F7F9FC',
-                        borderRight: '1px solid #E7EDF4',
-                        borderBottom: '1px solid #E7EDF4',
+                        bgcolor: isToday ? '#FDECEA' : 'transparent',
                       }}
                     >
                       <Typography
                         sx={{
-                          color: '#475569',
+                          color: isToday ? T.red : isWeekend ? T.text3 : T.text2,
                           fontSize: '0.7rem',
                           fontWeight: 800,
                         }}
@@ -865,124 +853,61 @@ function PlanningPage() {
                       </Typography>
                       <Typography
                         sx={{
-                          mt: 0.1,
-                          color: '#94A3B8',
-                          fontSize: '0.55rem',
+                          color: T.text3,
+                          fontSize: '0.56rem',
+                          fontWeight: 700,
                           textTransform: 'uppercase',
                         }}
                       >
                         {day.format('dd')}
                       </Typography>
                     </Box>
-                  ))}
-                </Box>
-
-                {/* Filas de Ingenieros */}
-                {loadingAgents || loadingPlanning ? (
-                  <Box
-                    sx={{
-                      minHeight: 165,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 0.8,
-                      borderRight: '1px solid #E7EDF4',
-                      borderBottom: '1px solid #E7EDF4',
-                      bgcolor: '#FFFFFF',
-                    }}
-                  >
-                    <CircularProgress size={30} />
-                    <Typography
-                      sx={{
-                        color: '#94A3B8',
-                        fontSize: '0.82rem',
-                      }}
-                    >
-                      Cargando información de planeación...
-                    </Typography>
-                  </Box>
-                ) : agents.length === 0 ? (
-                  <Box
-                    sx={{
-                      minHeight: 165,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 0.8,
-                      borderRight: '1px solid #E7EDF4',
-                      borderBottom: '1px solid #E7EDF4',
-                      bgcolor: '#FFFFFF',
-                    }}
-                  >
-                    <CalendarMonthOutlined
-                      sx={{ color: '#CBD5E1', fontSize: 38 }}
-                    />
-                    <Typography
-                      sx={{
-                        color: '#64748B',
-                        fontSize: '0.9rem',
-                        fontWeight: 800,
-                      }}
-                    >
-                      No hay ISM/MESA activos registrados
-                    </Typography>
-                  </Box>
-                ) : (
-                  agents.map((agent) => (
-                    <PlanningTimelineRow
-                      key={agent.id}
-                      agent={agent}
-                      events={planningEvents.filter(
-                        (pe) => Number(pe.agenteId) === Number(agent.id),
-                      )}
-                      calendarDays={calendarDays}
-                      getEventPosition={getEventPosition}
-                    />
-                  ))
-                )}
+                  );
+                })}
               </Box>
+
+              {/* Filas */}
+              {loadingAgents || loadingPlanning ? (
+                <EmptyState minHeight={165}>
+                  <CircularProgress size={30} />
+                  <Typography sx={{ color: T.text3, fontSize: '0.82rem' }}>
+                    Cargando información de planeación...
+                  </Typography>
+                </EmptyState>
+              ) : agents.length === 0 ? (
+                <EmptyState minHeight={165}>
+                  <CalendarMonthOutlined sx={{ color: '#CBD5E1', fontSize: 38 }} />
+                  <Typography sx={{ color: T.text2, fontSize: '0.9rem', fontWeight: 700 }}>
+                    No hay ISM/MESA activos registrados
+                  </Typography>
+                </EmptyState>
+              ) : (
+                agents.map((agent) => (
+                  <PlanningTimelineRow
+                    key={agent.id}
+                    agent={agent}
+                    events={planningEvents.filter(
+                      (pe) => Number(pe.agenteId) === Number(agent.id),
+                    )}
+                    calendarDays={calendarDays}
+                    getEventPosition={getEventPosition}
+                    todayColumn={todayColumn}
+                  />
+                ))
+              )}
             </Box>
           </Box>
         </Paper>
 
-        {/* RESUMEN POR PERIODO */}
-        <Paper
-          sx={{
-            border: '1px solid #E7EDF4',
-            borderRadius: 1.5,
-            overflow: 'hidden',
-          }}
-        >
-          <Box
-            sx={{
-              px: 2,
-              py: 1.4,
-              display: 'flex',
-              flexDirection: { xs: 'column', lg: 'row' },
-              alignItems: { xs: 'stretch', lg: 'center' },
-              justifyContent: 'space-between',
-              gap: 1.25,
-              borderBottom: '1px solid #E7EDF4',
-            }}
-          >
+        {/* RESUMEN POR PERIODO CON "a" CENTRADA Y ALINEADA */}
+        <Paper elevation={0} sx={cardSx}>
+          <CardHead title="Resumen por periodo">
             <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              alignItems={{ xs: 'stretch', sm: 'center' }}
+              direction="row"
+              alignItems="center"
+              gap={2}
+              flexWrap="wrap"
             >
-              <Typography
-                sx={{
-                  color: '#173B66',
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Resumen por periodo
-              </Typography>
-
               <TextField
                 type="date"
                 value={periodStart}
@@ -990,13 +915,26 @@ function PlanningPage() {
                 size="small"
                 disabled={loadingSummary || exporting}
                 sx={{
-                  width: { xs: '100%', sm: 180 },
-                  '& .MuiOutlinedInput-root': { minHeight: 46 },
-                  '& .MuiInputBase-input': { fontSize: '0.86rem' },
+                  ...inputSx,
+                  width: 175,
+                  '& .MuiOutlinedInput-root': {
+                    ...inputSx['& .MuiOutlinedInput-root'],
+                    minHeight: 38,
+                  },
                 }}
               />
 
-              <Typography sx={{ color: '#94A3B8', textAlign: 'center' }}>
+              <Typography
+                sx={{
+                  color: T.text3,
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  px: 0.5,
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
                 a
               </Typography>
 
@@ -1007,9 +945,12 @@ function PlanningPage() {
                 size="small"
                 disabled={loadingSummary || exporting}
                 sx={{
-                  width: { xs: '100%', sm: 180 },
-                  '& .MuiOutlinedInput-root': { minHeight: 46 },
-                  '& .MuiInputBase-input': { fontSize: '0.86rem' },
+                  ...inputSx,
+                  width: 175,
+                  '& .MuiOutlinedInput-root': {
+                    ...inputSx['& .MuiOutlinedInput-root'],
+                    minHeight: 38,
+                  },
                 }}
               />
 
@@ -1018,47 +959,40 @@ function PlanningPage() {
                 variant="outlined"
                 disabled={loadingSummary || exporting}
                 onClick={handleApplyPeriod}
-                sx={{
-                  minHeight: 46,
-                  borderColor: '#E2E8F0',
-                  color: '#475569',
-                  textTransform: 'none',
-                  fontSize: '0.86rem',
-                  fontWeight: 700,
-                }}
+                sx={{ ...outlineBtnSx, px: 2, ml: 1 }}
               >
                 Aplicar
               </Button>
-            </Stack>
 
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={
-                exporting ? (
-                  <CircularProgress size={17} color="inherit" />
-                ) : (
-                  <DownloadOutlined />
-                )
-              }
-              disabled={exporting}
-              onClick={handleExport}
-              sx={{
-                minHeight: 46,
-                borderColor: '#B7DEC5',
-                color: '#168A4A',
-                textTransform: 'none',
-                fontSize: '0.86rem',
-                fontWeight: 700,
-                '&:hover': {
-                  borderColor: '#86C89B',
-                  bgcolor: '#F0FDF4',
-                },
-              }}
-            >
-              {exporting ? 'Exportando...' : 'Exportar a Excel'}
-            </Button>
-          </Box>
+              <Button
+                size="small"
+                variant="contained"
+                disableElevation
+                startIcon={
+                  exporting ? (
+                    <CircularProgress size={17} color="inherit" />
+                  ) : (
+                    <DownloadOutlined />
+                  )
+                }
+                disabled={exporting}
+                onClick={handleExport}
+                sx={{
+                  minHeight: 38,
+                  borderRadius: 2,
+                  bgcolor: '#0E9F6E',
+                  textTransform: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  px: 2.25,
+                  ml: 1,
+                  '&:hover': { bgcolor: '#067A55' },
+                }}
+              >
+                {exporting ? 'Exportando...' : 'Exportar a Excel'}
+              </Button>
+            </Stack>
+          </CardHead>
 
           <Box sx={{ overflowX: 'auto' }}>
             <Box
@@ -1068,28 +1002,30 @@ function PlanningPage() {
                 minWidth: 720,
                 borderCollapse: 'collapse',
                 '& th': {
-                  px: 1.75,
-                  py: 1.15,
-                  color: '#64748B',
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
+                  px: 2.5,
+                  py: 1.25,
+                  color: T.text3,
+                  fontSize: '0.66rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
                   textAlign: 'left',
                   textTransform: 'uppercase',
-                  bgcolor: '#F7F9FC',
-                  borderBottom: '1px solid #E7EDF4',
+                  bgcolor: T.head,
+                  borderBottom: `1px solid ${T.border}`,
                 },
                 '& td': {
-                  px: 1.75,
-                  py: 1,
-                  color: '#475569',
+                  px: 2.5,
+                  py: 1.25,
+                  color: T.text2,
                   fontSize: '0.84rem',
                   borderBottom: '1px solid #EEF2F6',
                 },
+                '& tbody tr:hover': { bgcolor: '#FBFDFE' },
               }}
             >
               <thead>
                 <tr>
-                  <th>ISM/MESA</th>
+                  <th>ISM / MESA</th>
                   <th style={{ textAlign: 'center' }}>Días vacaciones</th>
                   <th style={{ textAlign: 'center' }}>Días en proyecto</th>
                   <th style={{ textAlign: 'center' }}>Total días fuera</th>
@@ -1099,97 +1035,62 @@ function PlanningPage() {
                 {loadingSummary ? (
                   <tr>
                     <td colSpan={4}>
-                      <Box
-                        sx={{
-                          minHeight: 145,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
+                      <EmptyState minHeight={145}>
                         <CircularProgress size={28} />
-                      </Box>
+                      </EmptyState>
                     </td>
                   </tr>
                 ) : periodSummaryRows.length === 0 ? (
                   <tr>
                     <td colSpan={4}>
-                      <Box
-                        sx={{
-                          minHeight: 145,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 0.75,
-                          textAlign: 'center',
-                        }}
-                      >
-                        <CheckCircleOutlined
-                          sx={{ color: '#CBD5E1', fontSize: 34 }}
-                        />
-                        <Typography
-                          sx={{
-                            color: '#64748B',
-                            fontSize: '0.9rem',
-                            fontWeight: 800,
-                          }}
-                        >
+                      <EmptyState minHeight={145}>
+                        <InboxOutlined sx={{ color: '#CBD5E1', fontSize: 34 }} />
+                        <Typography sx={{ color: T.text2, fontSize: '0.9rem', fontWeight: 700 }}>
                           No hay información para este periodo
                         </Typography>
-                      </Box>
+                        <Typography sx={{ color: T.text3, fontSize: '0.72rem' }}>
+                          Ajusta las fechas y presiona Aplicar.
+                        </Typography>
+                      </EmptyState>
                     </td>
                   </tr>
                 ) : (
-                  periodSummaryRows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <Typography
-                          sx={{
-                            color: '#334155',
-                            fontSize: '0.84rem',
-                            fontWeight: 700,
-                          }}
-                        >
-                          {row.nombre}
-                        </Typography>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>{row.vacaciones}</td>
-                      <td style={{ textAlign: 'center' }}>{row.proyecto}</td>
-                      <td
-                        style={{
-                          color: '#173B66',
-                          fontWeight: 800,
-                          textAlign: 'center',
-                        }}
-                      >
-                        {row.total}
-                      </td>
-                    </tr>
-                  ))
+                  periodSummaryRows.map((row) => {
+                    const vac = Number(row.vacaciones) || 0;
+                    const proj = Number(row.proyecto) || 0;
+
+                    return (
+                      <tr key={row.id}>
+                        <td>
+                          <Stack direction="row" spacing={1.25} alignItems="center">
+                            <AgentAvatar name={row.nombre} />
+                            <Typography
+                              sx={{ color: T.text, fontSize: '0.84rem', fontWeight: 700 }}
+                            >
+                              {row.nombre}
+                            </Typography>
+                          </Stack>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>{row.vacaciones}</td>
+                        <td style={{ textAlign: 'center' }}>{row.proyecto}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <Chip
+                            size="small"
+                            label={`${row.total} ${Number(row.total) === 1 ? 'día' : 'días'}`}
+                            sx={{
+                              bgcolor: vac >= proj ? '#EAF2FA' : '#FDF3E3',
+                              color: vac >= proj ? T.link : '#B45309',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </Box>
-          </Box>
-
-          <Box
-            sx={{
-              px: 1.75,
-              py: 1.1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.9,
-              borderTop: '1px solid #E7EDF4',
-              bgcolor: '#FAFCFE',
-            }}
-          >
-            <InfoOutlined
-              sx={{ color: '#1674B7', fontSize: 21, flexShrink: 0 }}
-            />
-            <Typography sx={{ color: '#64748B', fontSize: '0.78rem' }}>
-              Las vacaciones y proyectos se guardan en PostgreSQL. El calendario,
-              resumen y archivo Excel se generan con información persistente.
-            </Typography>
           </Box>
         </Paper>
       </Box>
@@ -1197,19 +1098,100 @@ function PlanningPage() {
   );
 }
 
+/* ---------- Componentes auxiliares ---------- */
+
+function CardHead({ title, children }) {
+  return (
+    <Box
+      sx={{
+        px: 2.5,
+        minHeight: 64,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 2,
+        borderBottom: `1px solid ${T.border}`,
+      }}
+    >
+      <Typography
+        sx={{
+          color: T.text,
+          fontSize: '0.8rem',
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          lineHeight: 1,
+        }}
+      >
+        {title}
+      </Typography>
+
+      {children && (
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+          {children}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function SegmentedControl({ value, onChange, options, disabled }) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        gap: 0.5,
+        p: 0.5,
+        bgcolor: T.seg,
+        borderRadius: 2.5,
+        opacity: disabled ? 0.6 : 1,
+        pointerEvents: disabled ? 'none' : 'auto',
+      }}
+    >
+      {options.map((option) => {
+        const active = value === option.value;
+
+        return (
+          <Box
+            key={option.value}
+            role="button"
+            tabIndex={0}
+            onClick={() => onChange(option.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onChange(option.value);
+              }
+            }}
+            sx={{
+              flex: 1,
+              px: 1.5,
+              py: 0.9,
+              borderRadius: 2,
+              bgcolor: active ? '#FFFFFF' : 'transparent',
+              boxShadow: active ? '0 1px 3px rgba(15, 23, 42, 0.12)' : 'none',
+              color: active ? T.primary : T.text2,
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: active ? 700 : 600,
+              textAlign: 'center',
+              userSelect: 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {option.label}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 function DateField({ label, value, onChange, disabled }) {
   return (
     <Box>
-      <Typography
-        sx={{
-          mb: 0.7,
-          color: '#475569',
-          fontSize: '0.9rem',
-          fontWeight: 800,
-        }}
-      >
-        {label}
-      </Typography>
+      <Typography sx={labelSx}>{label}</Typography>
       <TextField
         type="date"
         value={value}
@@ -1218,170 +1200,215 @@ function DateField({ label, value, onChange, disabled }) {
         required
         disabled={disabled}
         size="small"
-        sx={{
-          '& .MuiOutlinedInput-root': {
-            minHeight: 48,
-          },
-          '& .MuiInputBase-input': {
-            fontSize: '0.9rem',
-          },
-        }}
+        sx={inputSx}
       />
     </Box>
   );
 }
 
-function PlanningMetricCard({ icon, label, value, color, background }) {
+function AgentAvatar({ name, size = 28 }) {
+  return (
+    <Avatar
+      sx={{
+        width: size,
+        height: size,
+        background: 'linear-gradient(135deg, #1D6FB8, #14406A)',
+        fontSize: size * 0.4,
+        fontWeight: 700,
+      }}
+    >
+      {String(name || '?').charAt(0).toUpperCase()}
+    </Avatar>
+  );
+}
+
+function EmptyState({ minHeight, children }) {
+  return (
+    <Box
+      sx={{
+        minHeight,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 0.75,
+        textAlign: 'center',
+        bgcolor: '#FFFFFF',
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+/* KPI CON ANIMACIÓN DE ELEVACIÓN Y SOMBRA DE VISTA GENERAL */
+function PlanningMetricCard({ icon, label, value, subtitle, color, background }) {
   return (
     <Paper
+      elevation={0}
       sx={{
         position: 'relative',
-        height: 108,
-        overflow: 'hidden',
-        border: '1px solid #E7EDF4',
-        borderRadius: 1.5,
-        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.08)',
+        p: 2.25,
+        bgcolor: background,
+        border: '1px solid transparent',
+        borderRadius: 2.5,
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+        cursor: 'default',
+        transition: 'transform 0.22s ease, box-shadow 0.22s ease',
+        '&:hover': {
+          transform: 'translateY(-3px)',
+          boxShadow: '0 10px 20px -5px rgba(15, 23, 42, 0.12)',
+        },
       }}
     >
       <Box
         sx={{
-          height: '100%',
-          p: 1.55,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.65,
+          position: 'absolute',
+          top: 14,
+          right: 14,
+          width: 36,
+          height: 36,
+          display: 'grid',
+          placeItems: 'center',
+          borderRadius: 2,
+          bgcolor: '#FFFFFF',
+          color,
+          '& svg': { fontSize: 20 },
         }}
       >
-        <Box
-          sx={{
-            width: 48,
-            height: 48,
-            display: 'grid',
-            placeItems: 'center',
-            borderRadius: 1.5,
-            bgcolor: background,
-            color,
-            flexShrink: 0,
-            '& svg': {
-              fontSize: 27,
-            },
-          }}
-        >
-          {icon}
-        </Box>
-
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography
-            sx={{
-              color: '#334155',
-              fontSize: '0.94rem',
-              lineHeight: 1.1,
-              fontWeight: 700,
-            }}
-          >
-            {label}
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 0.65,
-              color,
-              fontSize: '1.78rem',
-              lineHeight: 1,
-              fontWeight: 800,
-            }}
-          >
-            {value}
-          </Typography>
-        </Box>
+        {icon}
       </Box>
 
-      <Box
+      <Typography
         sx={{
-          position: 'absolute',
-          right: 0,
-          bottom: 0,
-          left: 0,
-          height: 4,
-          bgcolor: color,
+          pr: 5,
+          color: T.text2,
+          fontSize: '0.66rem',
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
         }}
-      />
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        sx={{
+          mt: 0.5,
+          color: T.text,
+          fontSize: '2rem',
+          fontWeight: 800,
+          lineHeight: 1.2,
+        }}
+      >
+        {value}
+      </Typography>
+
+      <Typography sx={{ color: T.text3, fontSize: '0.75rem' }}>
+        {subtitle}
+      </Typography>
     </Paper>
   );
 }
 
 function LegendItem({ color, label }) {
   return (
-    <Stack direction="row" spacing={0.65} alignItems="center">
-      <Box
-        sx={{
-          width: 12,
-          height: 12,
-          borderRadius: 0.3,
-          bgcolor: color,
-        }}
-      />
-      <Typography sx={{ color: '#64748B', fontSize: '0.76rem' }}>
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color }} />
+      <Typography sx={{ color: T.text2, fontSize: '0.75rem', fontWeight: 600 }}>
         {label}
       </Typography>
     </Stack>
   );
 }
 
-/* COMPONENTE CON LA TIPOGRAFÍA Y ALTURA MEJORADA */
 function PlanningTimelineRow({
   agent,
   events,
   calendarDays,
   getEventPosition,
+  todayColumn,
 }) {
+  const totalDays = events.reduce(
+    (sum, event) => sum + getEventPosition(event).duration,
+    0,
+  );
+
   return (
     <Box
       sx={{
-        minHeight: 48,
+        minHeight: 56,
         display: 'grid',
         gridTemplateColumns: `180px repeat(${calendarDays.length}, minmax(30px, 1fr))`,
-        borderBottom: '1px solid #E7EDF4',
+        borderBottom: '1px solid #EEF2F6',
+        '&:last-child': { borderBottom: 'none' },
+        '&:hover': { bgcolor: '#FBFDFE' },
       }}
     >
-      <Box
-        sx={{
-          minHeight: 48,
-          display: 'flex',
-          alignItems: 'center',
-          px: 1.5,
-          borderRight: '1px solid #E7EDF4',
-          bgcolor: '#FFFFFF',
-        }}
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1.25}
+        sx={{ px: 1.75, py: 1, borderRight: '1px solid #EEF2F6' }}
       >
-        <Typography
-          noWrap
-          sx={{
-            maxWidth: 160,
-            color: '#334155',
-            fontSize: '0.82rem',
-            fontWeight: 800,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {agent.nombre}
-        </Typography>
-      </Box>
+        <AgentAvatar name={agent.nombre} size={26} />
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            noWrap
+            sx={{
+              maxWidth: 120,
+              color: T.text,
+              fontSize: '0.78rem',
+              fontWeight: 700,
+            }}
+          >
+            {agent.nombre}
+          </Typography>
+          <Typography sx={{ color: T.text3, fontSize: '0.66rem' }}>
+            {totalDays > 0 ? `${totalDays} días fuera` : 'Disponible'}
+          </Typography>
+        </Box>
+      </Stack>
 
       <Box
         sx={{
           gridColumn: `span ${calendarDays.length}`,
-          minHeight: 48,
           position: 'relative',
           display: 'grid',
           gridTemplateColumns: `repeat(${calendarDays.length}, minmax(30px, 1fr))`,
-          bgcolor: '#FAFDFB',
+          alignItems: 'center',
           backgroundImage:
-            'linear-gradient(to right, #E7EDF4 1px, transparent 1px)',
+            'linear-gradient(to right, #EEF2F6 1px, transparent 1px)',
           backgroundSize: `calc(100% / ${calendarDays.length}) 100%`,
         }}
       >
+        {todayColumn && (
+          <Box
+            sx={{
+              gridColumn: `${todayColumn} / span 1`,
+              gridRow: 1,
+              position: 'relative',
+              alignSelf: 'stretch',
+              zIndex: 3,
+              pointerEvents: 'none',
+            }}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: '50%',
+                width: 2.5,
+                transform: 'translateX(-50%)',
+                bgcolor: T.red,
+                borderRadius: 1,
+                boxShadow: '0 0 8px rgba(192, 57, 43, 0.5)',
+              }}
+            />
+          </Box>
+        )}
+
         {events.map((event) => {
           const position = getEventPosition(event);
           const isVacation = event.tipo === 'VACACIONES';
@@ -1389,39 +1416,42 @@ function PlanningTimelineRow({
           return (
             <Box
               key={event.id}
-              title={`${event.agente}: ${
+              title={`${event.agente || agent.nombre}: ${
                 isVacation ? 'Vacaciones' : 'Proyecto'
+              } (${event.fechaInicio} a ${event.fechaFin})${
+                event.comentario ? ` · ${event.comentario}` : ''
               }`}
               sx={{
                 gridColumn: `${position.startIndex + 1} / span ${position.duration}`,
-                alignSelf: 'center',
-                zIndex: 1,
+                gridRow: 1,
+                zIndex: 2,
                 minWidth: 0,
-                height: 28,
-                mx: 0.2,
-                px: 1,
+                height: 24,
+                mx: '1px',
+                px: 1.1,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
                 overflow: 'hidden',
-                borderRadius: 1,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-                bgcolor: isVacation ? '#1A73E8' : '#F6AA61',
-                color: '#FFFFFF',
+                borderRadius: '7px',
+                background: isVacation
+                  ? 'linear-gradient(90deg, #1D6FB8, #155E9C)'
+                  : 'linear-gradient(90deg, #F59E0B, #D97706)',
+                boxShadow: isVacation
+                  ? '0 3px 8px -2px rgba(29, 111, 184, 0.5)'
+                  : '0 3px 8px -2px rgba(217, 119, 6, 0.5)',
               }}
             >
               <Typography
                 noWrap
                 sx={{
                   color: '#FFFFFF',
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
+                  fontSize: '0.64rem',
+                  fontWeight: 700,
                   letterSpacing: '0.02em',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
                 }}
               >
                 {isVacation ? 'Vacaciones' : 'Proyecto'}
+                {position.duration > 4 ? ` · ${position.label}` : ''}
               </Typography>
             </Box>
           );

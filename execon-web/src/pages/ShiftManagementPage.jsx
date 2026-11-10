@@ -1,14 +1,20 @@
 import {
+  AccessTimeOutlined,
+  AssignmentIndOutlined,
+  CalendarMonthOutlined,
+  CheckCircleOutlined,
+  GroupOutlined,
+  MoreTimeOutlined,
+  RefreshOutlined,
+} from '@mui/icons-material';
+
+import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   CircularProgress,
   FormControl,
-  FormControlLabel,
-  FormGroup,
-  InputLabel,
   MenuItem,
   Paper,
   Select,
@@ -38,6 +44,60 @@ const DIAS = [
   { valor: 7, nombre: 'Domingo', corto: 'Dom' },
 ];
 
+/* ---------- Tokens del sistema de diseño ---------- */
+const T = {
+  bg: '#F1F5F9',
+  border: '#E2E8F0',
+  text: '#0F172A',
+  text2: '#475569',
+  text3: '#94A3B8',
+  primary: '#003359',
+  link: '#155E9C',
+  head: '#F8FAFC',
+  seg: '#EEF2F6',
+};
+
+const cardSx = {
+  bgcolor: '#FFFFFF',
+  border: `1px solid ${T.border}`,
+  borderRadius: 2.5,
+  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+  overflow: 'hidden',
+};
+
+const labelSx = {
+  display: 'block',
+  mb: 0.75,
+  color: T.text3,
+  fontSize: '0.66rem',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+};
+
+const inputSx = {
+  '& .MuiOutlinedInput-root': {
+    minHeight: 44,
+    borderRadius: 2,
+    bgcolor: '#FFFFFF',
+    fontSize: '0.86rem',
+    '& fieldset': { borderColor: T.border },
+    '&:hover fieldset': { borderColor: '#CBD5E1' },
+    '&.Mui-focused fieldset': { borderColor: T.primary },
+  },
+};
+
+const outlineBtnSx = {
+  minHeight: 34,
+  borderColor: T.border,
+  borderRadius: 2,
+  color: T.text2,
+  textTransform: 'none',
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  '&:hover': { borderColor: T.primary, bgcolor: T.head },
+};
+
 function nuevoHorario() {
   return {
     nombre: '',
@@ -56,36 +116,6 @@ function nuevaAsignacion() {
     motivo: '',
   };
 }
-
-const panelSx = {
-  p: { xs: 2, md: 2.5 },
-  border: '1px solid #E7EDF4',
-  borderRadius: 1.5,
-};
-
-const botonSx = {
-  minHeight: 44,
-  bgcolor: '#003359',
-  textTransform: 'none',
-  fontWeight: 700,
-  '&:hover': {
-    bgcolor: '#002642',
-  },
-};
-
-const tablaSx = {
-  minWidth: 780,
-  '& th': {
-    bgcolor: '#F7F9FC',
-    color: '#64748B',
-    fontWeight: 800,
-    whiteSpace: 'nowrap',
-  },
-  '& td': {
-    color: '#475569',
-    borderBottom: '1px solid #EEF2F6',
-  },
-};
 
 function normalizarRol(rol) {
   const valor = String(rol || '').trim().toLowerCase();
@@ -140,22 +170,6 @@ function mostrarFecha(fecha) {
   return anio && mes && dia
     ? `${dia}/${mes}/${anio}`
     : String(fecha);
-}
-
-function TituloSeccion({ children }) {
-  return (
-    <Typography
-      component="h2"
-      sx={{
-        mb: 2,
-        color: '#173B66',
-        fontSize: '1.1rem',
-        fontWeight: 800,
-      }}
-    >
-      {children}
-    </Typography>
-  );
 }
 
 function ShiftManagementPage() {
@@ -432,136 +446,81 @@ function ShiftManagementPage() {
   }
 
   return (
-    <DashboardLayout
-      title="Turnos y disponibilidad"
-      subtitle="Administración de horarios de los ISM"
-    >
-      <Stack spacing={2}>
-        <Paper sx={panelSx}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={2}
-            sx={{
-              justifyContent: 'space-between',
-              alignItems: {
-                xs: 'stretch',
-                sm: 'center',
-              },
-            }}
-          >
-            <Box>
-              <Typography
-                component="h1"
-                sx={{
-                  color: '#173B66',
-                  fontSize: '1.2rem',
-                  fontWeight: 800,
-                }}
-              >
-                Gestión de turnos
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.5,
-                  color: '#64748B',
-                  fontSize: '0.9rem',
-                }}
-              >
-                Zona de operación: America/Monterrey.
-              </Typography>
-            </Box>
-
-            <Button
-              variant="outlined"
-              onClick={cargarDatos}
-              disabled={ocupado}
-              sx={{
-                textTransform: 'none',
-                minHeight: 42,
-                flexShrink: 0,
-              }}
-            >
-              {cargando ? 'Actualizando...' : 'Actualizar datos'}
-            </Button>
-          </Stack>
-        </Paper>
-
+    <DashboardLayout>
+      <Box sx={{ pt: 1, pb: 3 }}>
+        {/* ALERTAS DE ERROR O ESTADO */}
         {mensaje && (
           <Alert
             severity={mensaje.severity}
             onClose={() => setMensaje(null)}
+            sx={{ mb: 2.5, borderRadius: 2.5, fontSize: '0.86rem' }}
           >
             {mensaje.texto}
           </Alert>
         )}
 
         {errorCarga && (
-          <Alert severity="error">
-            {errorCarga}
-            {' '}
-            Los formularios permanecerán deshabilitados hasta
+          <Alert severity="error" sx={{ mb: 2.5, borderRadius: 2.5, fontSize: '0.86rem' }}>
+            {errorCarga} Los formularios permanecerán deshabilitados hasta
             verificar la sesión y cargar los datos correctamente.
           </Alert>
         )}
 
-        {cargando && (
-          <Paper sx={panelSx}>
-            <Stack
-              direction="row"
-              spacing={1.5}
-              sx={{ alignItems: 'center' }}
-            >
-              <CircularProgress size={24} />
-
-              <Typography sx={{ color: '#64748B' }}>
-                Verificando sesión y cargando horarios…
-              </Typography>
-            </Stack>
-          </Paper>
-        )}
-
+        {/* KPIs SUPERIORES CON ANIMACIÓN */}
         {autorizado && datosListos && (
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: {
                 xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
                 md: 'repeat(3, minmax(0, 1fr))',
               },
               gap: 2,
+              mb: 3,
             }}
           >
-            {[
-              ['Horarios registrados', turnos.length],
-              ['ISM/MESA activos', ingenieros.length],
-              ['Asignaciones registradas', asignaciones.length],
-            ].map(([titulo, cantidad]) => (
-              <Paper key={titulo} sx={panelSx}>
-                <Typography
-                  sx={{
-                    color: '#64748B',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  {titulo}
-                </Typography>
+            <ShiftMetricCard
+              icon={<AccessTimeOutlined />}
+              label="Horarios registrados"
+              value={turnos.length}
+              subtitle="Plantillas de jornada"
+              color="#1D6FB8"
+              background="#EAF2FA"
+            />
 
-                <Typography
-                  sx={{
-                    mt: 1,
-                    color: '#173B66',
-                    fontSize: '1.8rem',
-                    fontWeight: 800,
-                  }}
-                >
-                  {cantidad}
-                </Typography>
-              </Paper>
-            ))}
+            <ShiftMetricCard
+              icon={<GroupOutlined />}
+              label="ISM/MESA activos"
+              value={ingenieros.length}
+              subtitle="Cuentas habilitadas"
+              color="#0E9F6E"
+              background="#E9F9F1"
+            />
+
+            <ShiftMetricCard
+              icon={<CalendarMonthOutlined />}
+              label="Asignaciones registradas"
+              value={asignaciones.length}
+              subtitle="Vigentes en el periodo"
+              color="#6D5BD0"
+              background="#EFEDFA"
+            />
           </Box>
         )}
 
+        {cargando && (
+          <Paper elevation={0} sx={{ ...cardSx, p: 3, mb: 3 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center">
+              <CircularProgress size={22} />
+              <Typography sx={{ color: T.text3, fontSize: '0.86rem' }}>
+                Verificando sesión y cargando horarios…
+              </Typography>
+            </Stack>
+          </Paper>
+        )}
+
+        {/* FORMULARIOS LADO A LADO CON ALTURA EQUILIBRADA */}
         <Box
           sx={{
             display: 'grid',
@@ -569,401 +528,559 @@ function ShiftManagementPage() {
               xs: '1fr',
               lg: 'repeat(2, minmax(0, 1fr))',
             },
-            gap: 2,
-            alignItems: 'start',
+            gap: 2.5,
+            alignItems: 'stretch',
+            mb: 3.5,
           }}
         >
+          {/* FORMULARIO: CREAR HORARIO */}
           <Paper
             component="form"
             onSubmit={crearHorario}
-            sx={panelSx}
+            elevation={0}
+            sx={{ ...cardSx, display: 'flex', flexDirection: 'column' }}
           >
-            <TituloSeccion>Crear horario</TituloSeccion>
-
-            <Stack spacing={2}>
-              <TextField
-                label="Nombre del horario"
-                placeholder="Ejemplo: Nocturno entre semana"
-                value={horario.nombre}
-                onChange={(event) =>
-                  cambiarHorario('nombre', event.target.value)
-                }
-                required
-                fullWidth
-                disabled={formularioDeshabilitado}
-                slotProps={{
-                  htmlInput: {
-                    maxLength: 100,
-                  },
+            <CardHead title="Crear horario">
+              <Chip
+                size="small"
+                label="Plantilla"
+                sx={{
+                  bgcolor: '#EAF2FA',
+                  color: T.link,
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
                 }}
               />
+            </CardHead>
 
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: {
-                    xs: '1fr',
-                    sm: 'repeat(2, minmax(0, 1fr))',
-                  },
-                  gap: 2,
-                }}
-              >
-                <TextField
-                  label="Hora de entrada"
-                  type="time"
-                  value={horario.horaInicio}
-                  onChange={(event) =>
-                    cambiarHorario('horaInicio', event.target.value)
-                  }
-                  required
-                  fullWidth
-                  disabled={formularioDeshabilitado}
-                  slotProps={{
-                    inputLabel: {
-                      shrink: true,
-                    },
-                    htmlInput: {
-                      step: 60,
-                    },
-                  }}
-                />
+            <Box sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <Stack spacing={2} sx={{ flex: 1 }}>
+                <Box>
+                  <Typography sx={labelSx}>Nombre del horario *</Typography>
+                  <TextField
+                    placeholder="Ejemplo: Nocturno entre semana"
+                    value={horario.nombre}
+                    onChange={(event) =>
+                      cambiarHorario('nombre', event.target.value)
+                    }
+                    required
+                    fullWidth
+                    size="small"
+                    disabled={formularioDeshabilitado}
+                    slotProps={{
+                      htmlInput: { maxLength: 100 },
+                    }}
+                    sx={inputSx}
+                  />
+                </Box>
 
-                <TextField
-                  label="Hora de salida"
-                  type="time"
-                  value={horario.horaFin}
-                  onChange={(event) =>
-                    cambiarHorario('horaFin', event.target.value)
-                  }
-                  required
-                  fullWidth
-                  disabled={formularioDeshabilitado}
-                  slotProps={{
-                    inputLabel: {
-                      shrink: true,
-                    },
-                    htmlInput: {
-                      step: 60,
-                    },
-                  }}
-                />
-              </Box>
-
-              <Box>
-                <Typography
+                <Box
                   sx={{
-                    color: '#475569',
-                    fontWeight: 700,
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: 'repeat(2, minmax(0, 1fr))',
+                    },
+                    gap: 2,
                   }}
                 >
-                  Días de inicio de jornada
-                </Typography>
-
-                <FormGroup row>
-                  {DIAS.map((dia) => (
-                    <FormControlLabel
-                      key={dia.valor}
-                      label={dia.nombre}
-                      control={
-                        <Checkbox
-                          checked={horario.diasSemana.includes(
-                            dia.valor,
-                          )}
-                          onChange={() => alternarDia(dia.valor)}
-                          disabled={formularioDeshabilitado}
-                        />
+                  <Box>
+                    <Typography sx={labelSx}>Hora de entrada *</Typography>
+                    <TextField
+                      type="time"
+                      value={horario.horaInicio}
+                      onChange={(event) =>
+                        cambiarHorario('horaInicio', event.target.value)
                       }
+                      required
+                      fullWidth
+                      size="small"
+                      disabled={formularioDeshabilitado}
+                      slotProps={{
+                        htmlInput: { step: 60 },
+                      }}
+                      sx={inputSx}
                     />
-                  ))}
-                </FormGroup>
-              </Box>
+                  </Box>
 
-              {cruzaMedianoche && (
-                <Alert severity="info">
-                  Este horario termina al día siguiente.
-                  Los días seleccionados corresponden al inicio
-                  de la jornada.
-                </Alert>
-              )}
+                  <Box>
+                    <Typography sx={labelSx}>Hora de salida *</Typography>
+                    <TextField
+                      type="time"
+                      value={horario.horaFin}
+                      onChange={(event) =>
+                        cambiarHorario('horaFin', event.target.value)
+                      }
+                      required
+                      fullWidth
+                      size="small"
+                      disabled={formularioDeshabilitado}
+                      slotProps={{
+                        htmlInput: { step: 60 },
+                      }}
+                      sx={inputSx}
+                    />
+                  </Box>
+                </Box>
 
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={formularioDeshabilitado}
-                sx={botonSx}
-              >
-                {guardandoHorario
-                  ? 'Guardando...'
-                  : 'Guardar horario'}
-              </Button>
-            </Stack>
+                <Box>
+                  <Typography sx={labelSx}>Días de inicio de jornada</Typography>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, 1fr)',
+                      gap: 1,
+                    }}
+                  >
+                    {DIAS.map((dia) => {
+                      const activo = horario.diasSemana.includes(dia.valor);
+                      return (
+                        <Box
+                          key={dia.valor}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            if (!formularioDeshabilitado) alternarDia(dia.valor);
+                          }}
+                          sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.6,
+                            p: 1,
+                            borderRadius: 2,
+                            border: `1.5px solid ${activo ? T.link : T.border}`,
+                            bgcolor: activo ? '#EAF2FA' : '#FFFFFF',
+                            color: activo ? T.link : T.text3,
+                            cursor: formularioDeshabilitado ? 'not-allowed' : 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.15s ease',
+                            '&:hover': {
+                              borderColor: activo ? T.link : '#CBD5E1',
+                              bgcolor: activo ? '#EAF2FA' : T.head,
+                            },
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: activo ? T.link : '#CBD5E1',
+                            }}
+                          />
+                          <Typography
+                            sx={{
+                              fontSize: '0.72rem',
+                              fontWeight: activo ? 800 : 600,
+                              lineHeight: 1,
+                            }}
+                          >
+                            {dia.corto}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+
+                {cruzaMedianoche && (
+                  <Alert severity="info" sx={{ borderRadius: 2, fontSize: '0.8rem' }}>
+                    Este horario termina al día siguiente (+1 día). Los días
+                    seleccionados corresponden al inicio de la jornada.
+                  </Alert>
+                )}
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disableElevation
+                  startIcon={
+                    guardandoHorario ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      <MoreTimeOutlined />
+                    )
+                  }
+                  disabled={formularioDeshabilitado}
+                  sx={{
+                    minHeight: 44,
+                    borderRadius: 2,
+                    bgcolor: T.primary,
+                    textTransform: 'none',
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                    mt: 'auto',
+                    pt: 1,
+                    '&:hover': { bgcolor: '#002642' },
+                  }}
+                >
+                  {guardandoHorario ? 'Guardando...' : 'Guardar horario'}
+                </Button>
+              </Stack>
+            </Box>
           </Paper>
 
+          {/* FORMULARIO: ASIGNAR HORARIO */}
           <Paper
             component="form"
             onSubmit={asignarHorario}
-            sx={panelSx}
+            elevation={0}
+            sx={{ ...cardSx, display: 'flex', flexDirection: 'column' }}
           >
-            <TituloSeccion>
-              Asignar horario a ISM/MESA
-            </TituloSeccion>
-
-            <Stack spacing={2}>
-              <FormControl
-                fullWidth
-                required
-                disabled={
-                  formularioDeshabilitado ||
-                  ingenieros.length === 0
-                }
-              >
-                <InputLabel id="turno-ism-label">
-                  ISM/MESA
-                </InputLabel>
-
-                <Select
-                  labelId="turno-ism-label"
-                  label="ISM/MESA"
-                  value={asignacion.idIngeniero}
-                  onChange={(event) =>
-                    cambiarAsignacion(
-                      'idIngeniero',
-                      event.target.value,
-                    )
-                  }
-                >
-                  {ingenieros.map((ingeniero) => (
-                    <MenuItem
-                      key={ingeniero.id}
-                      value={String(ingeniero.id)}
-                    >
-                      {ingeniero.nombreCompleto}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl
-                fullWidth
-                required
-                disabled={
-                  formularioDeshabilitado ||
-                  turnosActivos.length === 0
-                }
-              >
-                <InputLabel id="turno-horario-label">
-                  Horario
-                </InputLabel>
-
-                <Select
-                  labelId="turno-horario-label"
-                  label="Horario"
-                  value={asignacion.idTurno}
-                  onChange={(event) =>
-                    cambiarAsignacion(
-                      'idTurno',
-                      event.target.value,
-                    )
-                  }
-                >
-                  {turnosActivos.map((turno) => (
-                    <MenuItem
-                      key={turno.id}
-                      value={String(turno.id)}
-                    >
-                      {turno.nombre}
-                      {' · '}
-                      {turno.horaInicio}–{turno.horaFin}
-                      {turno.cruzaMedianoche ? ' (+1 día)' : ''}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Box
+            <CardHead title="Asignar horario a ISM/MESA">
+              <Chip
+                size="small"
+                label="Asignación"
                 sx={{
-                  display: 'grid',
-                  gridTemplateColumns: {
-                    xs: '1fr',
-                    sm: 'repeat(2, minmax(0, 1fr))',
-                  },
-                  gap: 2,
-                }}
-              >
-                <TextField
-                  label="Fecha inicial"
-                  type="date"
-                  value={asignacion.fechaInicio}
-                  onChange={(event) =>
-                    cambiarAsignacion(
-                      'fechaInicio',
-                      event.target.value,
-                    )
-                  }
-                  required
-                  fullWidth
-                  disabled={formularioDeshabilitado}
-                  slotProps={{
-                    inputLabel: {
-                      shrink: true,
-                    },
-                  }}
-                />
-
-                <TextField
-                  label="Fecha final (opcional)"
-                  type="date"
-                  value={asignacion.fechaFin}
-                  onChange={(event) =>
-                    cambiarAsignacion(
-                      'fechaFin',
-                      event.target.value,
-                    )
-                  }
-                  fullWidth
-                  disabled={formularioDeshabilitado}
-                  helperText="Vacía: vigencia sin fecha final."
-                  slotProps={{
-                    inputLabel: {
-                      shrink: true,
-                    },
-                    htmlInput: {
-                      min: asignacion.fechaInicio || undefined,
-                    },
-                  }}
-                />
-              </Box>
-
-              <TextField
-                label="Motivo de la asignación"
-                value={asignacion.motivo}
-                onChange={(event) =>
-                  cambiarAsignacion('motivo', event.target.value)
-                }
-                multiline
-                minRows={2}
-                required
-                fullWidth
-                disabled={formularioDeshabilitado}
-                slotProps={{
-                  htmlInput: {
-                    maxLength: 2000,
-                  },
+                  bgcolor: '#EFEDFA',
+                  color: '#6D5BD0',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
                 }}
               />
+            </CardHead>
 
-              <Alert severity="info">
-                La fecha final incluye las jornadas que comienzan
-                ese día, aunque terminen al día siguiente.
-              </Alert>
+            <Box sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <Stack spacing={2} sx={{ flex: 1 }}>
+                <Box>
+                  <Typography sx={labelSx}>ISM / MESA *</Typography>
+                  <FormControl
+                    fullWidth
+                    size="small"
+                    required
+                    disabled={
+                      formularioDeshabilitado ||
+                      ingenieros.length === 0
+                    }
+                  >
+                    <Select
+                      value={asignacion.idIngeniero}
+                      displayEmpty
+                      onChange={(event) =>
+                        cambiarAsignacion('idIngeniero', event.target.value)
+                      }
+                      renderValue={(selected) => {
+                        if (!selected) {
+                          return (
+                            <Typography sx={{ color: T.text3, fontSize: '0.86rem' }}>
+                              Selecciona un agente…
+                            </Typography>
+                          );
+                        }
+                        const ing = ingenieros.find(
+                          (i) => String(i.id) === String(selected),
+                        );
+                        return (
+                          <Typography sx={{ color: T.text, fontSize: '0.86rem', fontWeight: 600 }}>
+                            {ing?.nombreCompleto || selected}
+                          </Typography>
+                        );
+                      }}
+                      sx={{
+                        minHeight: 44,
+                        borderRadius: 2,
+                        fontSize: '0.86rem',
+                        '& fieldset': { borderColor: T.border },
+                      }}
+                    >
+                      {ingenieros.map((ingeniero) => (
+                        <MenuItem
+                          key={ingeniero.id}
+                          value={String(ingeniero.id)}
+                          sx={{ fontSize: '0.86rem' }}
+                        >
+                          {ingeniero.nombreCompleto}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
 
-              {datosListos && ingenieros.length === 0 && (
-                <Alert severity="warning">
-                  No hay usuarios activos con rol ISM/MESA.
-                </Alert>
-              )}
+                <Box>
+                  <Typography sx={labelSx}>Horario *</Typography>
+                  <FormControl
+                    fullWidth
+                    size="small"
+                    required
+                    disabled={
+                      formularioDeshabilitado ||
+                      turnosActivos.length === 0
+                    }
+                  >
+                    <Select
+                      value={asignacion.idTurno}
+                      displayEmpty
+                      onChange={(event) =>
+                        cambiarAsignacion('idTurno', event.target.value)
+                      }
+                      renderValue={(selected) => {
+                        if (!selected) {
+                          return (
+                            <Typography sx={{ color: T.text3, fontSize: '0.86rem' }}>
+                              Selecciona una plantilla de horario…
+                            </Typography>
+                          );
+                        }
+                        const t = turnosActivos.find(
+                          (turno) => String(turno.id) === String(selected),
+                        );
+                        return (
+                          <Typography sx={{ color: T.text, fontSize: '0.86rem', fontWeight: 600 }}>
+                            {t ? `${t.nombre} (${t.horaInicio}–${t.horaFin})` : selected}
+                          </Typography>
+                        );
+                      }}
+                      sx={{
+                        minHeight: 44,
+                        borderRadius: 2,
+                        fontSize: '0.86rem',
+                        '& fieldset': { borderColor: T.border },
+                      }}
+                    >
+                      {turnosActivos.map((turno) => (
+                        <MenuItem
+                          key={turno.id}
+                          value={String(turno.id)}
+                          sx={{ fontSize: '0.86rem' }}
+                        >
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography sx={{ fontSize: '0.86rem', fontWeight: 600 }}>
+                              {turno.nombre}
+                            </Typography>
+                            <Typography sx={{ fontSize: '0.78rem', color: T.text3 }}>
+                              {turno.horaInicio}–{turno.horaFin}
+                              {turno.cruzaMedianoche ? ' (+1 día)' : ''}
+                            </Typography>
+                          </Stack>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
 
-              {datosListos && turnosActivos.length === 0 && (
-                <Alert severity="warning">
-                  Primero crea un horario para poder asignarlo.
-                </Alert>
-              )}
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: 'repeat(2, minmax(0, 1fr))',
+                    },
+                    gap: 2,
+                  }}
+                >
+                  <Box>
+                    <Typography sx={labelSx}>Fecha inicial *</Typography>
+                    <TextField
+                      type="date"
+                      value={asignacion.fechaInicio}
+                      onChange={(event) =>
+                        cambiarAsignacion('fechaInicio', event.target.value)
+                      }
+                      required
+                      fullWidth
+                      size="small"
+                      disabled={formularioDeshabilitado}
+                      sx={inputSx}
+                    />
+                  </Box>
 
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={
-                  formularioDeshabilitado ||
-                  ingenieros.length === 0 ||
-                  turnosActivos.length === 0
-                }
-                sx={botonSx}
-              >
-                {guardandoAsignacion
-                  ? 'Asignando...'
-                  : 'Guardar asignación'}
-              </Button>
-            </Stack>
+                  <Box>
+                    <Typography sx={labelSx}>
+                      Fecha final <span style={{ color: T.text3, fontWeight: 400 }}>(opcional)</span>
+                    </Typography>
+                    <TextField
+                      type="date"
+                      value={asignacion.fechaFin}
+                      onChange={(event) =>
+                        cambiarAsignacion('fechaFin', event.target.value)
+                      }
+                      fullWidth
+                      size="small"
+                      disabled={formularioDeshabilitado}
+                      placeholder="Vacía: vigencia indefinida"
+                      slotProps={{
+                        htmlInput: {
+                          min: asignacion.fechaInicio || undefined,
+                        },
+                      }}
+                      sx={inputSx}
+                    />
+                  </Box>
+                </Box>
+
+                <Box>
+                  <Typography sx={labelSx}>Motivo de la asignación *</Typography>
+                  <TextField
+                    placeholder="Razón o proyecto por el que se asigna el turno…"
+                    value={asignacion.motivo}
+                    onChange={(event) =>
+                      cambiarAsignacion('motivo', event.target.value)
+                    }
+                    multiline
+                    minRows={2}
+                    required
+                    fullWidth
+                    size="small"
+                    disabled={formularioDeshabilitado}
+                    slotProps={{
+                      htmlInput: { maxLength: 2000 },
+                    }}
+                    sx={inputSx}
+                  />
+                  <Typography sx={{ mt: 0.75, color: T.text3, fontSize: '0.7rem' }}>
+                    La fecha final incluye las jornadas que comienzan ese día, aunque terminen al día siguiente.
+                  </Typography>
+                </Box>
+
+                {datosListos && ingenieros.length === 0 && (
+                  <Alert severity="warning" sx={{ borderRadius: 2, fontSize: '0.8rem' }}>
+                    No hay usuarios activos con rol ISM/MESA.
+                  </Alert>
+                )}
+
+                {datosListos && turnosActivos.length === 0 && (
+                  <Alert severity="warning" sx={{ borderRadius: 2, fontSize: '0.8rem' }}>
+                    Primero crea un horario para poder asignarlo.
+                  </Alert>
+                )}
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disableElevation
+                  startIcon={
+                    guardandoAsignacion ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      <AssignmentIndOutlined />
+                    )
+                  }
+                  disabled={
+                    formularioDeshabilitado ||
+                    ingenieros.length === 0 ||
+                    turnosActivos.length === 0
+                  }
+                  sx={{
+                    minHeight: 44,
+                    borderRadius: 2,
+                    bgcolor: T.primary,
+                    textTransform: 'none',
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                    mt: 'auto',
+                    pt: 1,
+                    '&:hover': { bgcolor: '#002642' },
+                  }}
+                >
+                  {guardandoAsignacion ? 'Asignando...' : 'Guardar asignación'}
+                </Button>
+              </Stack>
+            </Box>
           </Paper>
         </Box>
 
+        {/* TABLAS INFERIORES */}
         {autorizado && datosListos && (
-          <>
-            <Paper sx={panelSx}>
-              <TituloSeccion>
-                Horarios registrados
-              </TituloSeccion>
+          <Stack spacing={3.5}>
+            {/* TABLA: HORARIOS REGISTRADOS */}
+            <Paper elevation={0} sx={cardSx}>
+              <CardHead title="Horarios registrados">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={cargarDatos}
+                  disabled={ocupado}
+                  startIcon={
+                    cargando ? (
+                      <CircularProgress size={14} color="inherit" />
+                    ) : (
+                      <RefreshOutlined fontSize="small" />
+                    )
+                  }
+                  sx={outlineBtnSx}
+                >
+                  {cargando ? 'Actualizando...' : 'Actualizar datos'}
+                </Button>
+              </CardHead>
 
-              <TableContainer>
-                <Table size="small" sx={tablaSx}>
+              <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 780, borderCollapse: 'collapse' }}>
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>Entrada</TableCell>
-                      <TableCell>Salida</TableCell>
-                      <TableCell>Días de inicio</TableCell>
-                      <TableCell>Zona horaria</TableCell>
-                      <TableCell>Estado</TableCell>
+                    <TableRow sx={{ bgcolor: T.head }}>
+                      <TableCell sx={thSx}>Nombre</TableCell>
+                      <TableCell sx={thSx}>Entrada</TableCell>
+                      <TableCell sx={thSx}>Salida</TableCell>
+                      <TableCell sx={thSx}>Días de inicio</TableCell>
+                      <TableCell sx={thSx}>Zona horaria</TableCell>
+                      <TableCell sx={thSx}>Estado</TableCell>
                     </TableRow>
                   </TableHead>
 
                   <TableBody>
                     {turnos.length === 0 ? (
                       <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          align="center"
-                          sx={{ py: 4 }}
-                        >
-                          Todavía no hay horarios registrados.
+                        <TableCell colSpan={6} sx={{ py: 5, textAlign: 'center' }}>
+                          <EmptyStateText
+                            title="Todavía no hay horarios registrados"
+                            subtitle="Crea una plantilla con el formulario de la izquierda."
+                          />
                         </TableCell>
                       </TableRow>
                     ) : (
                       turnos.map((turno) => (
-                        <TableRow key={turno.id}>
-                          <TableCell>
+                        <TableRow
+                          key={turno.id}
+                          sx={{
+                            '&:hover': { bgcolor: '#FBFDFE' },
+                            '& td': { borderBottom: '1px solid #EEF2F6', py: 1.4, fontSize: '0.84rem' },
+                          }}
+                        >
+                          <TableCell sx={{ fontWeight: 700, color: T.text }}>
                             {turno.nombre}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700, color: T.link }}>
                             {turno.horaInicio}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700, color: T.link }}>
                             {turno.horaFin}
-
                             {turno.cruzaMedianoche && (
-                              <Typography
-                                component="span"
+                              <Chip
+                                size="small"
+                                label="+1 día"
                                 sx={{
                                   ml: 1,
-                                  color: '#1674B7',
-                                  fontSize: '0.75rem',
+                                  height: 20,
+                                  fontSize: '0.65rem',
+                                  fontWeight: 700,
+                                  bgcolor: '#F1F5F9',
+                                  color: T.text2,
                                 }}
-                              >
-                                +1 día
-                              </Typography>
+                              />
                             )}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ color: T.text2 }}>
                             {mostrarDias(turno.diasSemana)}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ color: T.text3, fontSize: '0.78rem' }}>
                             {turno.zonaHoraria}
                           </TableCell>
 
                           <TableCell>
                             <Chip
                               size="small"
-                              label={
-                                turno.activo ? 'Activo' : 'Inactivo'
-                              }
-                              color={
-                                turno.activo ? 'success' : 'default'
-                              }
-                              variant="outlined"
+                              label={turno.activo ? 'Activo' : 'Inactivo'}
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: '0.72rem',
+                                bgcolor: turno.activo ? '#E9F9F1' : '#F1F5F9',
+                                color: turno.activo ? '#0E9F6E' : T.text3,
+                              }}
                             />
                           </TableCell>
                         </TableRow>
@@ -974,113 +1091,101 @@ function ShiftManagementPage() {
               </TableContainer>
             </Paper>
 
-            <Paper sx={panelSx}>
-              <TituloSeccion>
-                Asignaciones registradas
-              </TituloSeccion>
+            {/* TABLA: ASIGNACIONES REGISTRADAS */}
+            <Paper elevation={0} sx={cardSx}>
+              <CardHead title="Asignaciones registradas" />
 
-              <Typography
-                sx={{
-                  mb: 2,
-                  color: '#64748B',
-                  fontSize: '0.85rem',
-                }}
-              >
-                Esta lista muestra registros de asignación.
-                No confirma que el ISM esté disponible en este momento.
-              </Typography>
-
-              <TableContainer>
-                <Table
-                  size="small"
-                  sx={{
-                    ...tablaSx,
-                    minWidth: 1100,
-                  }}
-                >
+              <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 1050, borderCollapse: 'collapse' }}>
                   <TableHead>
-                    <TableRow>
-                      <TableCell>ISM/MESA</TableCell>
-                      <TableCell>Horario</TableCell>
-                      <TableCell>Horas</TableCell>
-                      <TableCell>Días de inicio</TableCell>
-                      <TableCell>Desde</TableCell>
-                      <TableCell>Hasta</TableCell>
-                      <TableCell>Registro</TableCell>
-                      <TableCell>Asignado por</TableCell>
-                      <TableCell>Motivo</TableCell>
+                    <TableRow sx={{ bgcolor: T.head }}>
+                      <TableCell sx={thSx}>ISM / MESA</TableCell>
+                      <TableCell sx={thSx}>Horario</TableCell>
+                      <TableCell sx={thSx}>Horas</TableCell>
+                      <TableCell sx={thSx}>Días de inicio</TableCell>
+                      <TableCell sx={thSx}>Desde</TableCell>
+                      <TableCell sx={thSx}>Hasta</TableCell>
+                      <TableCell sx={thSx}>Estado</TableCell>
+                      <TableCell sx={thSx}>Asignado por</TableCell>
+                      <TableCell sx={thSx}>Motivo</TableCell>
                     </TableRow>
                   </TableHead>
 
                   <TableBody>
                     {asignaciones.length === 0 ? (
                       <TableRow>
-                        <TableCell
-                          colSpan={9}
-                          align="center"
-                          sx={{ py: 4 }}
-                        >
-                          Todavía no hay asignaciones registradas.
+                        <TableCell colSpan={9} sx={{ py: 5, textAlign: 'center' }}>
+                          <EmptyStateText
+                            title="Todavía no hay asignaciones registradas"
+                            subtitle="Asigna un horario a un agente con el formulario superior."
+                          />
                         </TableCell>
                       </TableRow>
                     ) : (
                       asignaciones.map((registro) => (
-                        <TableRow key={registro.id}>
-                          <TableCell>
+                        <TableRow
+                          key={registro.id}
+                          sx={{
+                            '&:hover': { bgcolor: '#FBFDFE' },
+                            '& td': { borderBottom: '1px solid #EEF2F6', py: 1.4, fontSize: '0.84rem' },
+                          }}
+                        >
+                          <TableCell sx={{ fontWeight: 700, color: T.text }}>
                             {registro.ingeniero}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ color: T.text }}>
                             {registro.turno}
                           </TableCell>
 
-                          <TableCell
-                            sx={{ whiteSpace: 'nowrap' }}
-                          >
+                          <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontWeight: 700, color: T.link }}>
                             {registro.horaInicio}–{registro.horaFin}
-                            {registro.cruzaMedianoche
-                              ? ' (+1 día)'
-                              : ''}
+                            {registro.cruzaMedianoche && (
+                              <Chip
+                                size="small"
+                                label="+1 día"
+                                sx={{
+                                  ml: 0.75,
+                                  height: 20,
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  bgcolor: '#F1F5F9',
+                                  color: T.text2,
+                                }}
+                              />
+                            )}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ color: T.text2 }}>
                             {mostrarDias(registro.diasSemana)}
                           </TableCell>
 
-                          <TableCell
-                            sx={{ whiteSpace: 'nowrap' }}
-                          >
+                          <TableCell sx={{ whiteSpace: 'nowrap', color: T.text2 }}>
                             {mostrarFecha(registro.fechaInicio)}
                           </TableCell>
 
-                          <TableCell
-                            sx={{ whiteSpace: 'nowrap' }}
-                          >
+                          <TableCell sx={{ whiteSpace: 'nowrap', color: T.text2 }}>
                             {mostrarFecha(registro.fechaFin)}
                           </TableCell>
 
                           <TableCell>
                             <Chip
                               size="small"
-                              label={
-                                registro.cancelada
-                                  ? 'Cancelada'
-                                  : 'No cancelada'
-                              }
-                              color={
-                                registro.cancelada
-                                  ? 'default'
-                                  : 'info'
-                              }
-                              variant="outlined"
+                              label={registro.cancelada ? 'Cancelada' : 'Vigente'}
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: '0.72rem',
+                                bgcolor: registro.cancelada ? '#F1F5F9' : '#EAF2FA',
+                                color: registro.cancelada ? T.text3 : T.link,
+                              }}
                             />
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ color: T.text3, fontSize: '0.78rem' }}>
                             {registro.nombreAsignador}
                           </TableCell>
 
-                          <TableCell sx={{ minWidth: 200 }}>
+                          <TableCell sx={{ minWidth: 200, color: T.text2, fontSize: '0.8rem' }}>
                             {registro.motivo}
                           </TableCell>
                         </TableRow>
@@ -1090,17 +1195,144 @@ function ShiftManagementPage() {
                 </Table>
               </TableContainer>
             </Paper>
-          </>
+          </Stack>
         )}
-
-        <Alert severity="warning">
-          El cálculo de disponibilidad actual sigue pendiente.
-          Estar “En mesa” o tener una asignación registrada
-          no confirma por sí solo que una persona esté dentro
-          de turno y sin bloqueos.
-        </Alert>
-      </Stack>
+      </Box>
     </DashboardLayout>
+  );
+}
+
+/* ---------- Componentes auxiliares ---------- */
+
+const thSx = {
+  px: 2.5,
+  py: 1.25,
+  color: T.text3,
+  fontSize: '0.66rem',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textAlign: 'left',
+  textTransform: 'uppercase',
+  borderBottom: `1px solid ${T.border}`,
+  whiteSpace: 'nowrap',
+};
+
+function CardHead({ title, children }) {
+  return (
+    <Box
+      sx={{
+        px: 2.5,
+        minHeight: 56,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 2,
+        borderBottom: `1px solid ${T.border}`,
+      }}
+    >
+      <Typography
+        sx={{
+          color: T.text,
+          fontSize: '0.8rem',
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          lineHeight: 1,
+        }}
+      >
+        {title}
+      </Typography>
+
+      {children && (
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+          {children}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function ShiftMetricCard({ icon, label, value, subtitle, color, background }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        position: 'relative',
+        p: 2.25,
+        bgcolor: background,
+        border: '1px solid transparent',
+        borderRadius: 2.5,
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+        cursor: 'default',
+        transition: 'transform 0.22s ease, box-shadow 0.22s ease',
+        '&:hover': {
+          transform: 'translateY(-3px)',
+          boxShadow: '0 10px 20px -5px rgba(15, 23, 42, 0.12)',
+        },
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 14,
+          right: 14,
+          width: 36,
+          height: 36,
+          display: 'grid',
+          placeItems: 'center',
+          borderRadius: 2,
+          bgcolor: '#FFFFFF',
+          color,
+          '& svg': { fontSize: 20 },
+        }}
+      >
+        {icon}
+      </Box>
+
+      <Typography
+        sx={{
+          pr: 5,
+          color: T.text2,
+          fontSize: '0.66rem',
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        sx={{
+          mt: 0.5,
+          color: T.text,
+          fontSize: '2rem',
+          fontWeight: 800,
+          lineHeight: 1.2,
+        }}
+      >
+        {value}
+      </Typography>
+
+      <Typography sx={{ color: T.text3, fontSize: '0.75rem' }}>
+        {subtitle}
+      </Typography>
+    </Paper>
+  );
+}
+
+function EmptyStateText({ title, subtitle }) {
+  return (
+    <Box sx={{ py: 2 }}>
+      <CheckCircleOutlined sx={{ color: '#CBD5E1', fontSize: 34, mb: 0.5 }} />
+      <Typography sx={{ color: T.text2, fontSize: '0.88rem', fontWeight: 700 }}>
+        {title}
+      </Typography>
+      <Typography sx={{ color: T.text3, fontSize: '0.72rem', mt: 0.25 }}>
+        {subtitle}
+      </Typography>
+    </Box>
   );
 }
 

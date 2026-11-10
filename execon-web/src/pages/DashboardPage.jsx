@@ -2,9 +2,9 @@ import {
   BusinessCenterOutlined,
   GroupsOutlined,
   LocationOnOutlined,
+  RefreshOutlined,
   RestaurantOutlined,
-  SentimentDissatisfiedOutlined,
-  TodayOutlined,
+  SearchOutlined,
   WarningAmberOutlined,
   WbSunnyOutlined,
 } from '@mui/icons-material';
@@ -15,10 +15,7 @@ import {
   Box,
   Button,
   CircularProgress,
-  Divider,
-  FormControl,
   Grid,
-  IconButton,
   InputAdornment,
   MenuItem,
   Paper,
@@ -36,75 +33,95 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../layouts/DashboardLayout';
 import { dashboardService } from '../services/dashboardService';
 
+/* ===================== SISTEMA DE DISEÑO ===================== */
+const TOKENS = {
+  primary: '#003359',
+  border: '#E2E8F0',
+  divider: '#EDF2F7',
+  text: '#0F172A',
+  text2: '#475569',
+  text3: '#94A3B8',
+  cardShadow: '0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(10,37,64,.12)',
+};
+
 const STATUS_CONFIG = [
   {
     id: 'mesa',
     field: 'enMesa',
     label: 'En mesa',
-    color: '#0F9D58',
-    lightColor: '#E9F8EF',
+    sub: 'Disponibles para asignación',
+    color: '#1D6FB8',
+    lightColor: '#EAF2FA',
     icon: <GroupsOutlined />,
   },
   {
     id: 'campo',
     field: 'enCampo',
     label: 'En campo',
-    color: '#1A73E8',
-    lightColor: '#EAF3FF',
+    sub: 'Atendiendo Onsites',
+    color: '#0E9F6E',
+    lightColor: '#E9F9F1',
     icon: <LocationOnOutlined />,
   },
   {
     id: 'comida',
     field: 'enComida',
     label: 'En comida',
-    color: '#F29900',
-    lightColor: '#FFF6E8',
+    sub: 'Regreso estimado 45 min',
+    color: '#D97706',
+    lightColor: '#FDF3E3',
     icon: <RestaurantOutlined />,
   },
   {
     id: 'proyecto',
     field: 'enProyecto',
     label: 'En proyecto',
-    color: '#7E57C2',
-    lightColor: '#F3EEFF',
+    sub: 'Asignados a proyectos',
+    color: '#6D5BB8',
+    lightColor: '#EFEDFA',
     icon: <BusinessCenterOutlined />,
   },
   {
     id: 'sin_reportar',
     field: 'sinReportar',
     label: 'Sin reportar',
-    color: '#E53935',
-    lightColor: '#FFF0F0',
+    sub: 'Requieren seguimiento',
+    color: '#C0392B',
+    lightColor: '#FDECEA',
     icon: <WarningAmberOutlined />,
   },
   {
     id: 'vacaciones',
     field: 'vacaciones',
     label: 'En vacaciones',
-    color: '#00A7B5',
-    lightColor: '#E8FAFC',
+    sub: 'Programadas en Planeación',
+    color: '#64748B',
+    lightColor: '#EEF2F6',
     icon: <WbSunnyOutlined />,
   },
 ];
 
 const STATUS_COLOR_BY_FIELD = {
-  enMesa: '#0F9D58',
-  enCampo: '#1A73E8',
-  enComida: '#F29900',
-  enProyecto: '#7E57C2',
-  sinReportar: '#E53935',
-  vacaciones: '#00A7B5',
+  enMesa: '#1D6FB8',
+  enCampo: '#0E9F6E',
+  enComida: '#D97706',
+  enProyecto: '#6D5BB8',
+  sinReportar: '#C0392B',
+  vacaciones: '#64748B',
 };
 
 const RECURRENCE_CONFIG = [
-  { id: 'sin_reportar', label: 'Sin reportar', color: '#E53935' },
-  { id: 'campo', label: 'En campo', color: '#35A96B' },
-  { id: 'comida', label: 'En comida', color: '#F29900' },
-  { id: 'proyecto', label: 'En proyecto', color: '#7E57C2' },
-  { id: 'mesa', label: 'En mesa', color: '#1A73E8' },
-  { id: 'vacaciones', label: 'En vacaciones', color: '#00A7B5' },
+  { id: 'sin_reportar', label: 'Sin reportar', color: '#C0392B' },
+  { id: 'campo', label: 'En campo', color: '#0E9F6E' },
+  { id: 'comida', label: 'En comida', color: '#D97706' },
+  { id: 'proyecto', label: 'En proyecto', color: '#6D5BB8' },
+  { id: 'mesa', label: 'En mesa', color: '#1D6FB8' },
+  { id: 'vacaciones', label: 'En vacaciones', color: '#64748B' },
 ];
 
+const PERIOD_OPTIONS = ['Semana', 'Mes', 'Día'];
+
+/* ===================== UTILIDADES ===================== */
 function formatDateForApi(date) {
   return date.toISOString().split('T')[0];
 }
@@ -145,125 +162,211 @@ function getInitialDashboardData() {
   };
 }
 
-/* =========================================================
-   TARJETAS SUPERIORES CON LAS MEDIDAS EXACTAS DE ONSITE (108px)
-   ========================================================= */
+/* ===================== COMPONENTES DE DISEÑO ===================== */
+
+/* Tarjeta KPI de estatus (estilo boceto: etiqueta pequeña, número grande, icono tintado) */
 function StatusCard({ card, isSelected, onClick }) {
   return (
     <Paper
       onClick={onClick}
       sx={{
         position: 'relative',
-        height: 108,
+        height: 118,
         overflow: 'hidden',
-        border: isSelected ? `2px solid ${card.color}` : '1px solid #E7EDF4',
-        borderRadius: 1.5,
+        border: isSelected
+          ? `1.5px solid ${card.color}`
+          : `1px solid ${TOKENS.border}`,
+        borderRadius: 2.5,
         boxShadow: isSelected
-          ? `0 0 0 3px ${card.lightColor}`
-          : '0 1px 3px rgba(15, 23, 42, 0.08)',
+          ? `0 0 0 3px ${card.lightColor}, ${TOKENS.cardShadow}`
+          : TOKENS.cardShadow,
+        bgcolor: isSelected ? card.lightColor : '#FFFFFF',
         cursor: 'pointer',
         userSelect: 'none',
         transition: 'all 180ms ease',
         '&:hover': {
           transform: 'translateY(-2px)',
-          borderColor: card.color,
-          boxShadow: '0 5px 14px rgba(15, 23, 42, 0.12)',
+          boxShadow: '0 8px 24px -8px rgba(10,37,64,.18)',
         },
       }}
     >
-      <Box
-        sx={{
-          height: '100%',
-          p: 1.55,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.65,
-        }}
-      >
+      <Box sx={{ height: '100%', p: 1.75, display: 'flex', flexDirection: 'column' }}>
         <Box
           sx={{
-            width: 48,
-            height: 48,
-            display: 'grid',
-            placeItems: 'center',
-            borderRadius: 1.5,
-            bgcolor: card.lightColor,
-            color: card.color,
-            flexShrink: 0,
-            '& svg': { fontSize: 27 },
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            mb: 'auto',
           }}
         >
-          {card.icon}
-        </Box>
-
-        <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
             sx={{
-              color: '#334155',
-              fontSize: '0.94rem',
+              color: TOKENS.text3,
+              fontSize: '0.66rem',
               fontWeight: 700,
-              lineHeight: 1.1,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              lineHeight: 1.3,
             }}
           >
             {card.label}
           </Typography>
 
-          <Typography
+          <Box
             sx={{
-              mt: 0.65,
+              width: 36,
+              height: 36,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: 1.75,
+              bgcolor: card.lightColor,
               color: card.color,
-              fontSize: '1.78rem',
-              fontWeight: 800,
-              lineHeight: 1,
+              flexShrink: 0,
+              '& svg': { fontSize: 19 },
             }}
           >
-            {card.value}
-          </Typography>
+            {card.icon}
+          </Box>
         </Box>
-      </Box>
 
-      <Box
-        sx={{
-          position: 'absolute',
-          right: 0,
-          bottom: 0,
-          left: 0,
-          height: 4,
-          bgcolor: card.color,
-        }}
-      />
+        <Typography
+          sx={{
+            color: card.color,
+            fontSize: '1.7rem',
+            fontWeight: 800,
+            lineHeight: 1,
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {card.value}
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.5,
+            color: TOKENS.text3,
+            fontSize: '0.64rem',
+            fontWeight: 500,
+          }}
+        >
+          {card.sub}
+        </Typography>
+      </Box>
     </Paper>
   );
 }
 
-function MetricCircle({ percentage }) {
+/* Encabezado reutilizable de tarjeta de sección */
+function CardHead({ title, hint, children }) {
+  return (
+    <Box
+      sx={{
+        px: 2.25,
+        pt: 2,
+        pb: 1.75,
+        borderBottom: `1px solid ${TOKENS.divider}`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        flexWrap: 'wrap',
+      }}
+    >
+      <Box>
+        <Typography sx={{ color: TOKENS.text, fontSize: '0.9rem', fontWeight: 700 }}>
+          {title}
+        </Typography>
+        {hint && (
+          <Typography sx={{ color: TOKENS.text3, fontSize: '0.72rem', mt: 0.3 }}>
+            {hint}
+          </Typography>
+        )}
+      </Box>
+      {children && (
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.2}
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          sx={{ ml: 'auto', width: { xs: '100%', sm: 'auto' } }}
+        >
+          {children}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
+/* Control segmentado (Semana / Mes / Día) */
+function SegmentedControl({ value, onChange }) {
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        bgcolor: '#EEF2F6',
+        borderRadius: 1.5,
+        p: '3px',
+      }}
+    >
+      {PERIOD_OPTIONS.map((option) => {
+        const isActive = value === option;
+        return (
+          <Button
+            key={option}
+            size="small"
+            disableRipple
+            onClick={() => onChange(option)}
+            sx={{
+              minWidth: 64,
+              py: 0.45,
+              px: 1.5,
+              fontSize: '0.74rem',
+              fontWeight: 600,
+              borderRadius: 1,
+              textTransform: 'none',
+              color: isActive ? TOKENS.primary : TOKENS.text2,
+              bgcolor: isActive ? '#FFFFFF' : 'transparent',
+              boxShadow: isActive ? '0 1px 4px rgba(15,23,42,.12)' : 'none',
+              '&:hover': {
+                bgcolor: isActive ? '#FFFFFF' : 'rgba(15,23,42,.04)',
+              },
+            }}
+          >
+            {option}
+          </Button>
+        );
+      })}
+    </Box>
+  );
+}
+
+/* Anillo de disponibilidad efectiva */
+function MetricRing({ percentage }) {
   const safePercentage = Math.max(0, Math.min(Number(percentage) || 0, 100));
-  const radius = 34;
+  const radius = 44;
   const circumference = 2 * Math.PI * radius;
   const progress = (safePercentage / 100) * circumference;
 
   return (
-    <Box sx={{ position: 'relative', width: 84, height: 84, flexShrink: 0 }}>
-      <svg width="84" height="84" viewBox="0 0 84 84">
+    <Box sx={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}>
+      <svg width="110" height="110" viewBox="0 0 110 110">
         <circle
-          cx="42"
-          cy="42"
+          cx="55"
+          cy="55"
           r={radius}
           fill="none"
-          stroke="#E2E8F0"
-          strokeWidth="7"
+          stroke="#EEF2F6"
+          strokeWidth="10"
         />
         <circle
-          cx="42"
-          cy="42"
+          cx="55"
+          cy="55"
           r={radius}
           fill="none"
-          stroke="#35A96B"
-          strokeWidth="7"
+          stroke="#1D6FB8"
+          strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference - progress}
-          transform="rotate(-90 42 42)"
+          transform="rotate(-90 55 55)"
         />
       </svg>
 
@@ -271,24 +374,31 @@ function MetricCircle({ percentage }) {
         sx={{
           position: 'absolute',
           inset: 0,
-          display: 'grid',
-          placeItems: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
+        <Typography sx={{ color: TOKENS.text, fontWeight: 800, fontSize: '1.45rem' }}>
+          {safePercentage}%
+        </Typography>
         <Typography
           sx={{
-            color: '#237C4E',
-            fontWeight: 800,
-            fontSize: '0.92rem',
+            color: TOKENS.text3,
+            fontWeight: 600,
+            fontSize: '0.56rem',
+            letterSpacing: '0.08em',
           }}
         >
-          {safePercentage}%
+          PROMEDIO
         </Typography>
       </Box>
     </Box>
   );
 }
 
+/* Celda de estatus coloreada para la tabla */
 function StatusValueCell({ value, field }) {
   const safeValue = Number(value) || 0;
 
@@ -296,7 +406,7 @@ function StatusValueCell({ value, field }) {
     <Typography
       sx={{
         color: safeValue > 0 ? STATUS_COLOR_BY_FIELD[field] : '#CBD5E1',
-        fontSize: '0.82rem',
+        fontSize: '0.8rem',
         fontWeight: safeValue > 0 ? 800 : 600,
       }}
     >
@@ -305,8 +415,35 @@ function StatusValueCell({ value, field }) {
   );
 }
 
+/* Celda de ISM con avatar de inicial */
+function IsmCell({ value }) {
+  const name = String(value || 'Sin asignar');
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+      <Avatar
+        sx={{
+          width: 28,
+          height: 28,
+          fontSize: '0.72rem',
+          fontWeight: 700,
+          bgcolor: 'linear-gradient(135deg, #1D6FB8, #14406A)',
+          background: 'linear-gradient(135deg, #1D6FB8, #14406A)',
+        }}
+      >
+        {initial}
+      </Avatar>
+      <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, color: TOKENS.text }}>
+        {name}
+      </Typography>
+    </Box>
+  );
+}
+
+/* ===================== PÁGINA PRINCIPAL ===================== */
 function DashboardPage() {
-  const [period, setPeriod] = useState('Mes');
+  const [period, setPeriod] = useState('Semana');
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [selectedSite, setSelectedSite] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -421,6 +558,7 @@ function DashboardPage() {
     setSelectedStatus((prev) => (prev === cardId ? null : cardId));
   };
 
+  /* ---------- Gráfica de disponibilidad (línea con degradado) ---------- */
   const availabilityOption = useMemo(() => {
     const labels = dashboardData.disponibilidad.map(
       (item) => item.dia || item.fecha || '',
@@ -432,12 +570,7 @@ function DashboardPage() {
 
     return {
       animationDuration: 600,
-      grid: {
-        left: 42,
-        right: 22,
-        top: 30,
-        bottom: 28,
-      },
+      grid: { left: 42, right: 22, top: 30, bottom: 28 },
       tooltip: {
         trigger: 'axis',
         backgroundColor: '#FFFFFF',
@@ -455,7 +588,7 @@ function DashboardPage() {
         boundaryGap: false,
         data: labels,
         axisTick: { show: false },
-        axisLine: { lineStyle: { color: '#E2E8F0' } },
+        axisLine: { lineStyle: { color: TOKENS.border } },
         axisLabel: { color: '#64748B', fontSize: 11 },
       },
       yAxis: {
@@ -476,8 +609,8 @@ function DashboardPage() {
           data: values,
           symbol: 'circle',
           symbolSize: 8,
-          lineStyle: { color: '#1A73E8', width: 2.5 },
-          itemStyle: { color: '#1A73E8' },
+          lineStyle: { color: '#1D6FB8', width: 2.5 },
+          itemStyle: { color: '#1D6FB8', borderColor: '#FFFFFF', borderWidth: 2 },
           areaStyle: {
             color: {
               type: 'linear',
@@ -486,8 +619,8 @@ function DashboardPage() {
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: 'rgba(26, 115, 232, 0.22)' },
-                { offset: 1, color: 'rgba(26, 115, 232, 0.01)' },
+                { offset: 0, color: 'rgba(29, 111, 184, 0.22)' },
+                { offset: 1, color: 'rgba(29, 111, 184, 0.01)' },
               ],
             },
           },
@@ -496,6 +629,7 @@ function DashboardPage() {
     };
   }, [dashboardData.disponibilidad]);
 
+  /* ---------- Gráfica de reincidencia (barras horizontales) ---------- */
   const recurrenceOption = useMemo(() => {
     const valuesByStatus = new Map(
       dashboardData.reincidencia.map((item) => [
@@ -516,12 +650,7 @@ function DashboardPage() {
 
     return {
       animationDuration: 600,
-      grid: {
-        left: 95,
-        right: 40,
-        top: 22,
-        bottom: 28,
-      },
+      grid: { left: 95, right: 40, top: 22, bottom: 28 },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
@@ -570,6 +699,7 @@ function DashboardPage() {
     };
   }, [dashboardData.reincidencia]);
 
+  /* ---------- Sparkline compacto de disponibilidad ---------- */
   const compactAvailabilityOption = useMemo(() => {
     const labels = dashboardData.disponibilidad.map(
       (item) => item.dia || item.fecha || '',
@@ -581,12 +711,7 @@ function DashboardPage() {
 
     return {
       animation: false,
-      grid: {
-        left: 0,
-        right: 0,
-        top: 8,
-        bottom: 18,
-      },
+      grid: { left: 0, right: 0, top: 8, bottom: 18 },
       xAxis: {
         type: 'category',
         data: labels,
@@ -607,44 +732,35 @@ function DashboardPage() {
           data: values,
           symbol: 'circle',
           symbolSize: 5,
-          lineStyle: { width: 2, color: '#35A96B' },
-          itemStyle: { color: '#35A96B' },
-          areaStyle: { color: 'rgba(53, 169, 107, 0.08)' },
+          lineStyle: { width: 2, color: '#1D6FB8' },
+          itemStyle: { color: '#1D6FB8' },
+          areaStyle: { color: 'rgba(29, 111, 184, 0.08)' },
         },
       ],
     };
   }, [dashboardData.disponibilidad]);
 
+  /* ---------- Columnas de la tabla de volumetría ---------- */
   const columns = [
     {
       field: 'ism',
-      headerName: 'ISM/MESA',
-      minWidth: 220,
+      headerName: 'ISM / MESA',
+      minWidth: 200,
       flex: 1.5,
-      renderCell: (params) => (
-        <Typography
-          sx={{
-            fontSize: '0.82rem',
-            fontWeight: 800,
-            color: '#173B66',
-          }}
-        >
-          {params.value || 'Sin asignar'}
-        </Typography>
-      ),
+      renderCell: (params) => <IsmCell value={params.value} />,
     },
     {
       field: 'tareasCampo',
       headerName: 'Tareas campo',
-      minWidth: 115,
+      minWidth: 110,
       align: 'center',
       headerAlign: 'center',
       renderCell: (params) => Number(params.value) || 0,
     },
     {
       field: 'incidentesMesa',
-      headerName: 'Incidentes cerrados en mesa',
-      minWidth: 180,
+      headerName: 'Incidentes cerrados',
+      minWidth: 150,
       align: 'center',
       headerAlign: 'center',
       renderCell: (params) => Number(params.value) || 0,
@@ -660,12 +776,10 @@ function DashboardPage() {
     {
       field: 'enMesa',
       headerName: 'En mesa',
-      minWidth: 84,
+      minWidth: 88,
       align: 'center',
       headerAlign: 'center',
-      renderCell: (params) => (
-        <StatusValueCell value={params.value} field="enMesa" />
-      ),
+      renderCell: (params) => <StatusValueCell value={params.value} field="enMesa" />,
     },
     {
       field: 'enCampo',
@@ -673,9 +787,7 @@ function DashboardPage() {
       minWidth: 88,
       align: 'center',
       headerAlign: 'center',
-      renderCell: (params) => (
-        <StatusValueCell value={params.value} field="enCampo" />
-      ),
+      renderCell: (params) => <StatusValueCell value={params.value} field="enCampo" />,
     },
     {
       field: 'enComida',
@@ -700,7 +812,7 @@ function DashboardPage() {
     {
       field: 'sinReportar',
       headerName: 'Sin reportar',
-      minWidth: 105,
+      minWidth: 100,
       align: 'center',
       headerAlign: 'center',
       renderCell: (params) => (
@@ -710,7 +822,7 @@ function DashboardPage() {
     {
       field: 'vacaciones',
       headerName: 'Vacaciones',
-      minWidth: 100,
+      minWidth: 96,
       align: 'center',
       headerAlign: 'center',
       renderCell: (params) => (
@@ -727,11 +839,11 @@ function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <Box sx={{ width: '100%', pb: 3 }}>
+      <Box sx={{ width: '100%', pb: 3, zoom: 0.9 }}>
         {error && (
           <Alert
             severity="error"
-            sx={{ mb: 2, fontSize: '0.85rem' }}
+            sx={{ mb: 2, fontSize: '0.85rem', borderRadius: 2 }}
             action={
               <Button
                 color="inherit"
@@ -747,8 +859,8 @@ function DashboardPage() {
           </Alert>
         )}
 
-        {/* 1. TARJETAS DE ESTADO SUPERIORES (IGUAL A ONSITE) */}
-        <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+        {/* 1. TARJETAS KPI DE ESTATUS */}
+        <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
           {statusCards.map((card) => (
             <Grid key={card.id} size={{ xs: 12, sm: 6, lg: 4, xl: 2 }}>
               <StatusCard
@@ -763,23 +875,19 @@ function DashboardPage() {
         {/* 2. GRÁFICAS DE DISPONIBILIDAD Y REINCIDENCIAS */}
         <Paper
           sx={{
-            border: '1px solid #E7EDF4',
-            borderRadius: 1.5,
+            border: `1px solid ${TOKENS.border}`,
+            borderRadius: 2.5,
             overflow: 'hidden',
-            mb: 1.5,
+            boxShadow: TOKENS.cardShadow,
+            mb: 2.5,
           }}
         >
-          <Box sx={{ px: 2, pt: 1.75 }}>
-            <Typography
-              sx={{
-                color: '#183B63',
-                fontSize: '0.94rem',
-                fontWeight: 800,
-              }}
-            >
-              Disponibilidad y tendencias
-            </Typography>
-          </Box>
+          <CardHead
+            title="Disponibilidad y tendencias"
+            hint="Porcentaje de disponibilidad efectiva por día · última semana"
+          >
+            <SegmentedControl value={period} onChange={setPeriod} />
+          </CardHead>
 
           <Grid container>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -788,20 +896,19 @@ function DashboardPage() {
                   p: 2,
                   borderRight: {
                     xs: 'none',
-                    md: '1px solid #E7EDF4',
+                    md: `1px solid ${TOKENS.divider}`,
                   },
-                  borderBottom: {
-                    xs: '1px solid #E7EDF4',
-                    md: 'none',
-                  },
+                  borderBottom: { xs: `1px solid ${TOKENS.divider}`, md: 'none' },
                 }}
               >
                 <Typography
                   sx={{
-                    mb: 0.8,
-                    fontSize: '0.82rem',
-                    color: '#334155',
+                    mb: 1,
+                    fontSize: '0.72rem',
+                    color: TOKENS.text3,
                     fontWeight: 700,
+                    letterSpacing: '0.07em',
+                    textTransform: 'uppercase',
                   }}
                 >
                   Disponibilidad por día
@@ -810,11 +917,7 @@ function DashboardPage() {
                 <Box sx={{ height: 210 }}>
                   {loading ? (
                     <Box
-                      sx={{
-                        height: '100%',
-                        display: 'grid',
-                        placeItems: 'center',
-                      }}
+                      sx={{ height: '100%', display: 'grid', placeItems: 'center' }}
                     >
                       <CircularProgress size={30} />
                     </Box>
@@ -832,10 +935,12 @@ function DashboardPage() {
               <Box sx={{ p: 2 }}>
                 <Typography
                   sx={{
-                    mb: 0.8,
-                    fontSize: '0.82rem',
-                    color: '#334155',
+                    mb: 1,
+                    fontSize: '0.72rem',
+                    color: TOKENS.text3,
                     fontWeight: 700,
+                    letterSpacing: '0.07em',
+                    textTransform: 'uppercase',
                   }}
                 >
                   Reincidencia por estatus
@@ -844,11 +949,7 @@ function DashboardPage() {
                 <Box sx={{ height: 210 }}>
                   {loading ? (
                     <Box
-                      sx={{
-                        height: '100%',
-                        display: 'grid',
-                        placeItems: 'center',
-                      }}
+                      sx={{ height: '100%', display: 'grid', placeItems: 'center' }}
                     >
                       <CircularProgress size={30} />
                     </Box>
@@ -867,143 +968,93 @@ function DashboardPage() {
         {/* 3. TABLA DE VOLUMETRÍA DE ISM/MESA */}
         <Paper
           sx={{
-            border: '1px solid #E7EDF4',
-            borderRadius: 1.5,
+            border: `1px solid ${TOKENS.border}`,
+            borderRadius: 2.5,
             overflow: 'hidden',
-            mb: 1.5,
+            boxShadow: TOKENS.cardShadow,
+            mb: 2.5,
           }}
         >
-          <Box
-            sx={{
-              p: 2,
-              pb: 1.5,
-              display: 'flex',
-              alignItems: { xs: 'flex-start', lg: 'center' },
-              justifyContent: 'space-between',
-              flexDirection: { xs: 'column', lg: 'row' },
-              gap: 2,
-            }}
+          <CardHead
+            title="Volumetría de ISM/MESA"
+            hint={`Actividad y estatus por agente · periodo: ${period.toLowerCase()}`}
           >
-            <Typography
+            <Select
+              size="small"
+              value={selectedSite}
+              onChange={(event) => setSelectedSite(event.target.value)}
+              disabled={loadingSites}
               sx={{
-                color: '#183B63',
-                fontSize: '0.94rem',
-                fontWeight: 800,
+                height: 34,
+                minWidth: 170,
+                fontSize: '0.78rem',
+                fontWeight: 500,
+                color: TOKENS.text2,
+                bgcolor: '#F8FAFC',
+                borderRadius: 1.25,
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: TOKENS.border,
+                },
               }}
             >
-              Volumetría de ISM/MESA
-            </Typography>
+              <MenuItem value="todos">Todos los sitios</MenuItem>
 
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1.2}
-              sx={{ width: { xs: '100%', lg: 'auto' } }}
-            >
-              <Stack direction="row" spacing={0.6}>
-                {['Mes', 'Semana', 'Día'].map((periodOption) => (
-                  <Button
-                    key={periodOption}
-                    size="small"
-                    variant={period === periodOption ? 'contained' : 'text'}
-                    onClick={() => setPeriod(periodOption)}
-                    sx={{
-                      minWidth: 62,
-                      py: 0.7,
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      borderRadius: 1,
-                      color: period === periodOption ? '#FFFFFF' : '#334155',
-                      bgcolor:
-                        period === periodOption ? '#003359' : 'transparent',
-                      '&:hover': {
-                        bgcolor:
-                          period === periodOption
-                            ? '#002642'
-                            : 'rgba(0, 51, 89, 0.06)',
-                      },
-                    }}
-                  >
-                    {periodOption}
-                  </Button>
-                ))}
-              </Stack>
+              {sites.map((site) => (
+                <MenuItem
+                  key={site.id ?? site.id_sitio}
+                  value={site.id ?? site.id_sitio}
+                >
+                  {site.nombre ?? site.nombre_sitio}
+                </MenuItem>
+              ))}
+            </Select>
 
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <Select
-                  value={selectedSite}
-                  onChange={(event) => setSelectedSite(event.target.value)}
-                  disabled={loadingSites}
+            <TextField
+              size="small"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar ISM/MESA…"
+              sx={{
+                minWidth: { xs: '100%', sm: 220 },
+                '& .MuiOutlinedInput-root': {
+                  height: 34,
+                  fontSize: '0.78rem',
+                  bgcolor: '#F8FAFC',
+                  borderRadius: 1.25,
+                },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchOutlined sx={{ fontSize: 17, color: TOKENS.text3 }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+
+            <Tooltip title="Actualizar dashboard">
+              <span>
+                <Button
+                  onClick={loadDashboard}
+                  disabled={loading}
                   sx={{
-                    height: 38,
-                    fontSize: '0.82rem',
-                    color: '#475569',
+                    height: 34,
+                    minWidth: 34,
+                    p: 0,
+                    border: `1px solid ${TOKENS.border}`,
+                    borderRadius: 1.25,
+                    color: TOKENS.text2,
                     bgcolor: '#FFFFFF',
+                    '&:hover': { bgcolor: '#F8FAFC' },
                   }}
                 >
-                  <MenuItem value="todos">Todos los sitios</MenuItem>
-
-                  {sites.map((site) => (
-                    <MenuItem
-                      key={site.id ?? site.id_sitio}
-                      value={site.id ?? site.id_sitio}
-                    >
-                      {site.nombre ?? site.nombre_sitio}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <TextField
-                size="small"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Buscar ISM/MESA..."
-                sx={{
-                  minWidth: { xs: '100%', sm: 220 },
-                  '& .MuiOutlinedInput-root': {
-                    height: 38,
-                    fontSize: '0.82rem',
-                  },
-                }}
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <SentimentDissatisfiedOutlined
-                          sx={{
-                            fontSize: 18,
-                            color: '#94A3B8',
-                            transform: 'rotate(180deg)',
-                          }}
-                        />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-
-              <Tooltip title="Actualizar dashboard">
-                <span>
-                  <IconButton
-                    size="small"
-                    onClick={loadDashboard}
-                    disabled={loading}
-                    sx={{
-                      border: '1px solid #D9E2EC',
-                      borderRadius: 1,
-                      width: 38,
-                      height: 38,
-                      color: '#64748B',
-                    }}
-                  >
-                    <TodayOutlined sx={{ fontSize: 20 }} />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Stack>
-          </Box>
-
-          <Divider sx={{ borderColor: '#E7EDF4' }} />
+                  <RefreshOutlined sx={{ fontSize: 17 }} />
+                </Button>
+              </span>
+            </Tooltip>
+          </CardHead>
 
           <Box sx={{ height: 260, width: '100%' }}>
             <DataGrid
@@ -1012,8 +1063,8 @@ function DashboardPage() {
               loading={loading}
               hideFooter
               disableRowSelectionOnClick
-              rowHeight={34}
-              columnHeaderHeight={40}
+              rowHeight={38}
+              columnHeaderHeight={42}
               getRowId={(row) => row.id ?? row.idIsmMesa ?? row.id_ism_mesa}
               localeText={{
                 noRowsLabel: 'No hay información registrada para este periodo.',
@@ -1021,26 +1072,28 @@ function DashboardPage() {
               sx={{
                 border: 0,
                 '& .MuiDataGrid-columnHeaders': {
-                  bgcolor: '#F7F9FC',
-                  borderBottom: '1px solid #E7EDF4',
+                  bgcolor: '#F8FAFC',
+                  borderBottom: `1px solid ${TOKENS.border}`,
                 },
                 '& .MuiDataGrid-columnHeaderTitle': {
-                  color: '#334155',
-                  fontSize: '0.74rem',
-                  fontWeight: 800,
+                  color: TOKENS.text3,
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
                   whiteSpace: 'normal',
-                  lineHeight: 1.15,
+                  lineHeight: 1.2,
                   textAlign: 'center',
                 },
                 '& .MuiDataGrid-cell': {
-                  borderColor: '#EDF1F5',
-                  color: '#475569',
+                  borderColor: TOKENS.divider,
+                  color: TOKENS.text2,
                   fontSize: '0.82rem',
                   display: 'flex',
                   alignItems: 'center',
                 },
                 '& .MuiDataGrid-row:hover': {
-                  backgroundColor: '#F8FBFF',
+                  backgroundColor: '#F8FAFC',
                 },
                 '& .MuiDataGrid-footerContainer': {
                   display: 'none',
@@ -1051,49 +1104,40 @@ function DashboardPage() {
         </Paper>
 
         {/* 4. TARJETAS INFERIORES */}
-        <Grid container spacing={1.5} alignItems="stretch">
+        <Grid container spacing={2} alignItems="stretch">
           <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
             <Paper
               sx={{
                 width: '100%',
-                minHeight: 110,
-                border: '1px solid #E7EDF4',
-                borderRadius: 1.5,
-                p: 2,
+                border: `1px solid ${TOKENS.border}`,
+                borderRadius: 2.5,
+                boxShadow: TOKENS.cardShadow,
+                p: 2.5,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 2,
+                gap: 2.5,
+                flexWrap: 'wrap',
               }}
             >
-              <MetricCircle percentage={disponibilidadEfectiva} />
+              <MetricRing percentage={disponibilidadEfectiva} />
 
-              <Box sx={{ minWidth: 150 }}>
+              <Box sx={{ minWidth: 150, flex: 1 }}>
                 <Typography
-                  sx={{
-                    color: '#183B63',
-                    fontSize: '0.92rem',
-                    fontWeight: 800,
-                  }}
+                  sx={{ color: TOKENS.text, fontSize: '0.9rem', fontWeight: 700 }}
                 >
                   Disponibilidad efectiva
                 </Typography>
-
                 <Typography
-                  sx={{
-                    mt: 0.5,
-                    color: '#64748B',
-                    fontSize: '0.76rem',
-                  }}
+                  sx={{ mt: 0.5, color: TOKENS.text3, fontSize: '0.74rem' }}
                 >
-                  Promedio semanal
+                  Promedio semanal del equipo
                 </Typography>
-              </Box>
-
-              <Box sx={{ height: 75, flex: 1, minWidth: 160 }}>
-                <ReactECharts
-                  option={compactAvailabilityOption}
-                  style={{ height: '100%', width: '100%' }}
-                />
+                <Box sx={{ height: 64, mt: 1.5, minWidth: 160 }}>
+                  <ReactECharts
+                    option={compactAvailabilityOption}
+                    style={{ height: '100%', width: '100%' }}
+                  />
+                </Box>
               </Box>
             </Paper>
           </Grid>
@@ -1102,46 +1146,47 @@ function DashboardPage() {
             <Paper
               sx={{
                 width: '100%',
-                minHeight: 110,
-                border: '1px solid #E7EDF4',
-                borderRadius: 1.5,
-                p: 2,
+                border: `1px solid ${TOKENS.border}`,
+                borderRadius: 2.5,
+                boxShadow: TOKENS.cardShadow,
+                p: 2.5,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 2,
+                gap: 2.5,
+                flexWrap: 'wrap',
               }}
             >
               <Avatar
                 variant="rounded"
                 sx={{
-                  width: 58,
-                  height: 58,
-                  bgcolor: '#EAF3FF',
-                  color: '#1A73E8',
-                  borderRadius: 1.5,
+                  width: 56,
+                  height: 56,
+                  bgcolor: '#EAF2FA',
+                  color: '#1D6FB8',
+                  borderRadius: 2,
                 }}
               >
-                <GroupsOutlined sx={{ fontSize: 32 }} />
+                <GroupsOutlined sx={{ fontSize: 30 }} />
               </Avatar>
 
-              <Box sx={{ minWidth: 130 }}>
+              <Box sx={{ minWidth: 130, flex: 1 }}>
                 <Stack direction="row" alignItems="baseline" spacing={0.8}>
                   <Typography
                     sx={{
-                      color: '#173B66',
-                      fontSize: '1.85rem',
+                      color: TOKENS.text,
+                      fontSize: '1.9rem',
                       fontWeight: 800,
                       lineHeight: 1,
+                      letterSpacing: '-0.02em',
                     }}
                   >
                     {agentesActivos}
                   </Typography>
-
                   <Typography
                     sx={{
-                      color: '#183B63',
+                      color: TOKENS.text,
                       fontSize: '0.9rem',
-                      fontWeight: 800,
+                      fontWeight: 700,
                     }}
                   >
                     Agentes activos
@@ -1149,39 +1194,44 @@ function DashboardPage() {
                 </Stack>
 
                 <Typography
-                  sx={{
-                    mt: 0.6,
-                    color: '#64748B',
-                    fontSize: '0.76rem',
-                  }}
+                  sx={{ mt: 0.7, color: TOKENS.text3, fontSize: '0.74rem' }}
                 >
                   De {agentesTotales} agentes totales
                 </Typography>
-              </Box>
 
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 0.6,
-                  flex: 1,
-                  alignItems: 'center',
-                }}
-              >
-                {Array.from({ length: Math.max(agentesTotales, 1) }).map((_, index) => (
-                  <Avatar
-                    key={index}
-                    sx={{
-                      width: 20,
-                      height: 20,
-                      fontSize: 0,
-                      bgcolor: index < agentesActivos ? '#003359' : '#E2E8F0',
-                      border: '1px solid #CBD5E1',
-                    }}
-                  >
-                    A
-                  </Avatar>
-                ))}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 0.6,
+                    mt: 1.5,
+                    alignItems: 'center',
+                  }}
+                >
+                  {Array.from({ length: Math.max(agentesTotales, 1) }).map(
+                    (_, index) => (
+                      <Avatar
+                        key={index}
+                        sx={{
+                          width: 22,
+                          height: 22,
+                          fontSize: 0,
+                          bgcolor:
+                            index < agentesActivos
+                              ? 'linear-gradient(135deg, #1D6FB8, #14406A)'
+                              : '#E2E8F0',
+                          background:
+                            index < agentesActivos
+                              ? 'linear-gradient(135deg, #1D6FB8, #14406A)'
+                              : '#E2E8F0',
+                          border: '1px solid #CBD5E1',
+                        }}
+                      >
+                        A
+                      </Avatar>
+                    ),
+                  )}
+                </Box>
               </Box>
             </Paper>
           </Grid>
