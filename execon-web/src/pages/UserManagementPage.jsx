@@ -4,13 +4,14 @@ import {
   DeleteOutlineOutlined,
   EditOutlined,
   EmailOutlined,
-  GroupOutlined,
-  InfoOutlined,
   LaptopOutlined,
   LocationOnOutlined,
+  NavigateBefore,
+  NavigateNext,
   PersonOutlineOutlined,
   PersonRemoveOutlined,
   SearchOutlined,
+  StarOutlineOutlined,
   TuneOutlined,
 } from '@mui/icons-material';
 
@@ -41,41 +42,22 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TablePagination,
   TableRow,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DashboardLayout from '../layouts/DashboardLayout';
 import { usePreferences } from '../context/PreferencesContext';
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-).replace(/\/+$/, '');
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/+$/, '');
 
 const ROLES = [
-  {
-    value: 'supervisor',
-    label: 'Supervisor',
-  },
-  {
-    value: 'distribuidor',
-    label: 'Distribuidor',
-  },
-  {
-    value: 'ISM/MESA',
-    label: 'ISM/MESA',
-  },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'distribuidor', label: 'Distribuidor' },
+  { value: 'ISMMESA', label: 'ISM/MESA' },
 ];
 
 const EMPTY_CREATE_FORM = {
@@ -86,42 +68,54 @@ const EMPTY_CREATE_FORM = {
   contrasena: '',
 };
 
-const panelSx = {
-  border: '1px solid',
-  borderColor: 'divider',
-  borderRadius: 1.5,
+/* ---------- Tokens del Sistema de Diseño ---------- */
+const T = {
+  border: '#E2E8F0',
+  text: '#0F172A',
+  text2: '#475569',
+  text3: '#94A3B8',
+  primary: '#003359',
+  head: '#F8FAFC',
 };
 
-const fieldSx = {
-  '& .MuiOutlinedInput-root': {
-    minHeight: 46,
-  },
-  '& .MuiInputBase-input': {
-    fontSize: '0.9rem',
-  },
+const cardSx = {
+  bgcolor: '#FFFFFF',
+  borderRadius: 2.5,
+  border: `1px solid ${T.border}`,
+  boxShadow: '0 1px 2px rgba(15,23,42,.04), 0 4px 12px rgba(15,23,42,.04)',
 };
 
-const primaryButtonSx = {
-  minHeight: 46,
-  textTransform: 'none',
+const thSx = {
+  fontSize: '0.66rem',
   fontWeight: 800,
-  whiteSpace: 'nowrap',
+  letterSpacing: '.08em',
+  textTransform: 'uppercase',
+  color: T.text3,
+  py: 1.3,
+  bgcolor: T.head,
+  borderBottom: `1px solid ${T.border}`,
 };
 
+const iconBtnSx = {
+  border: `1px solid ${T.border}`,
+  borderRadius: 1.5,
+  color: T.text2,
+  '&:hover': { bgcolor: '#F1F5F9' },
+};
+
+/* ---------- Helpers de normalización ---------- */
 function normalizarRol(rol) {
   const valor = String(rol || '').trim().toLowerCase();
-
   const equivalencias = {
     admin: 'supervisor',
     supervisor: 'supervisor',
-    supervisor_administrador: 'supervisor',
+    'supervisor/administrador': 'supervisor',
     distribuidor: 'distribuidor',
-    distribuidor_onsite: 'distribuidor',
-    ingeniero: 'ISM/MESA',
-    ism_mesa: 'ISM/MESA',
-    'ism/mesa': 'ISM/MESA',
+    'distribuidor/onsite': 'distribuidor',
+    ingeniero: 'ISMMESA',
+    ismmesa: 'ISMMESA',
+    'ism/mesa': 'ISMMESA',
   };
-
   return equivalencias[valor] || valor;
 }
 
@@ -153,26 +147,23 @@ function getInitials(name) {
 function toFrontendUser(user) {
   return {
     id: user.id,
-    nombre: user.nombreCompleto || user.nombre_completo || '',
-    correo: user.correo || '',
+    nombre: user.nombreCompleto || user.nombre_completo || user.nombre || '',
+    correo: user.correo || user.email || '',
     rol: normalizarRol(user.rol),
     estatus:
-      String(user.estatus || '').toUpperCase() === 'INACTIVO' ||
-      user.activo === false
+      String(user.estatus || '').toUpperCase() === 'INACTIVO' || user.activo === false
         ? 'INACTIVO'
         : 'ACTIVO',
     ultimoAcceso: user.ultimoAcceso || user.ultimo_acceso || null,
-    fechaCreacion: user.creadoEn || user.creado_en || null,
+    fechaCreacion: user.creadoEn || user.creado_en || user.created_at || null,
     creadoPor: user.creadoPor || 'Sistema',
   };
 }
 
 function formatDateTime(value, locale = 'es-MX') {
   if (!value) return 'Sin registro';
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Sin registro';
-
   return date.toLocaleString(locale, {
     timeZone: 'America/Monterrey',
     day: '2-digit',
@@ -185,7 +176,6 @@ function formatDateTime(value, locale = 'es-MX') {
 
 async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem('execon_token');
-
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
@@ -197,27 +187,110 @@ async function apiRequest(endpoint, options = {}) {
   });
 
   const data = await response.json().catch(() => ({}));
-
   if (!response.ok) {
     const error = new Error(
       data.message ||
         (response.status === 401
           ? 'Tu sesión no es válida. Inicia sesión nuevamente.'
-          : 'No fue posible completar la operación.'),
+          : 'No fue posible completar la operación.')
     );
     error.status = response.status;
     throw error;
   }
-
   return data;
 }
 
-function UserManagementPage() {
-  const { preferences } = usePreferences();
+/* ---------- Badge de rol corporativo ---------- */
+function RolBadge({ rol }) {
+  const norm = normalizarRol(rol);
+  let color = '#6D5BD0';
+  let Icon = LaptopOutlined;
+  let label = 'ISM/MESA';
+
+  if (norm === 'supervisor') {
+    color = '#155E9C';
+    Icon = StarOutlineOutlined;
+    label = 'Supervisor';
+  } else if (norm === 'distribuidor') {
+    color = '#0E9F6E';
+    Icon = LocationOnOutlined;
+    label = 'Distribuidor';
+  }
+
+  return (
+    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.8, color, fontWeight: 700, fontSize: '0.8rem' }}>
+      <Icon sx={{ fontSize: 16 }} />
+      <span>{label}</span>
+    </Box>
+  );
+}
+
+/* ---------- Tarjeta KPI con animación y soporte para Imagen o Ícono ---------- */
+function KpiCard({ label, value, sub, bg, color, imgSrc, Icon }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        ...cardSx,
+        p: 2.2,
+        transition: 'transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease',
+        cursor: 'default',
+        '&:hover': {
+          transform: 'translateY(-4px) scale(1.01)',
+          boxShadow: '0 12px 24px -8px rgba(10,37,64,0.12), 0 4px 12px rgba(15,23,42,0.06)',
+          borderColor: '#CBD5E1',
+        },
+      }}
+    >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+        <Typography
+          sx={{ fontSize: '0.66rem', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: T.text3 }}
+        >
+          {label}
+        </Typography>
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: 2,
+            bgcolor: bg,
+            color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          {imgSrc ? (
+            <Box
+              component="img"
+              src={imgSrc}
+              alt={label}
+              sx={{
+                width: 60,
+                height: 60,
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          ) : Icon ? (
+            <Icon sx={{ fontSize: 20 }} />
+          ) : null}
+        </Box>
+      </Box>
+      <Typography sx={{ fontSize: '1.85rem', fontWeight: 800, color: T.text, lineHeight: 1 }}>
+        {value}
+      </Typography>
+      <Typography sx={{ fontSize: '0.74rem', color: T.text3, mt: 0.8 }}>{sub}</Typography>
+    </Paper>
+  );
+}
+
+/* ---------- Componente Principal ---------- */
+export default function UserManagementPage() {
+  const preferences = usePreferences();
   const configuredRows = Number(preferences?.registrosPorPagina);
-  const rowsPerPage = [10, 20, 50].includes(configuredRows)
-    ? configuredRows
-    : 10;
+  const rowsPerPage = [8, 10, 20, 50].includes(configuredRows) ? configuredRows : 8;
   const locale = preferences?.idioma || 'es-MX';
 
   const [users, setUsers] = useState([]);
@@ -245,11 +318,12 @@ function UserManagementPage() {
 
     try {
       const result = await apiRequest('/usuarios');
-      if (!Array.isArray(result.data)) {
+      const list = Array.isArray(result) ? result : result.data;
+      if (!Array.isArray(list)) {
         throw new Error('La API devolvió una lista de usuarios inesperada.');
       }
       if (sequence !== loadSequence.current) return;
-      setUsers(result.data.map(toFrontendUser));
+      setUsers(list.map(toFrontendUser));
     } catch (error) {
       if (sequence !== loadSequence.current) return;
       setUsers([]);
@@ -276,51 +350,27 @@ function UserManagementPage() {
 
   const filteredUsers = useMemo(() => {
     const normalizedSearch = normalizarTexto(search);
-
     return users.filter((user) => {
-      const searchable = normalizarTexto(
-        [user.nombre, user.correo, getRoleLabel(user.rol)].join(' '),
-      );
-
-      const matchesSearch =
-        !normalizedSearch || searchable.includes(normalizedSearch);
-
+      const searchable = normalizarTexto([user.nombre, user.correo, getRoleLabel(user.rol)].join(' '));
+      const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
       const rol = normalizarRol(user.rol);
-      const matchesRole =
-        roleFilter === 'TODOS' || rol === normalizarRol(roleFilter);
-
+      const matchesRole = roleFilter === 'TODOS' || rol === normalizarRol(roleFilter);
       return matchesSearch && matchesRole;
     });
   }, [users, search, roleFilter]);
 
-  const lastPage = Math.max(
-    0,
-    Math.ceil(filteredUsers.length / rowsPerPage) - 1,
-  );
+  const lastPage = Math.max(0, Math.ceil(filteredUsers.length / rowsPerPage) - 1);
   const effectivePage = Math.min(page, lastPage);
-  const visibleUsers = filteredUsers.slice(
-    effectivePage * rowsPerPage,
-    (effectivePage + 1) * rowsPerPage,
-  );
+  const visibleUsers = filteredUsers.slice(effectivePage * rowsPerPage, (effectivePage + 1) * rowsPerPage);
 
   const totals = useMemo(() => {
     return {
       supervisores: users.filter(
-        (user) =>
-          ['admin', 'supervisor'].includes(normalizarRol(user.rol)) &&
-          user.estatus === 'ACTIVO',
+        (u) => ['admin', 'supervisor'].includes(normalizarRol(u.rol)) && u.estatus === 'ACTIVO'
       ).length,
-      distribuidores: users.filter(
-        (user) =>
-          normalizarRol(user.rol) === 'distribuidor' &&
-          user.estatus === 'ACTIVO',
-      ).length,
-      ismMesa: users.filter(
-        (user) =>
-          normalizarRol(user.rol) === 'ISM/MESA' &&
-          user.estatus === 'ACTIVO',
-      ).length,
-      inactivos: users.filter((user) => user.estatus === 'INACTIVO').length,
+      distribuidores: users.filter((u) => normalizarRol(u.rol) === 'distribuidor' && u.estatus === 'ACTIVO').length,
+      ismMesa: users.filter((u) => normalizarRol(u.rol) === 'ISMMESA' && u.estatus === 'ACTIVO').length,
+      inactivos: users.filter((u) => u.estatus === 'INACTIVO').length,
     };
   }, [users]);
 
@@ -341,11 +391,9 @@ function UserManagementPage() {
 
   function putUser(updatedUser) {
     setUsers((currentUsers) => {
-      const exists = currentUsers.some((user) => user.id === updatedUser.id);
+      const exists = currentUsers.some((u) => u.id === updatedUser.id);
       return exists
-        ? currentUsers.map((user) =>
-            user.id === updatedUser.id ? updatedUser : user,
-          )
+        ? currentUsers.map((u) => (u.id === updatedUser.id ? updatedUser : u))
         : [updatedUser, ...currentUsers];
     });
   }
@@ -363,47 +411,29 @@ function UserManagementPage() {
   }
 
   function handleCreateField(field, value) {
-    setCreateForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
+    setCreateForm((current) => ({ ...current, [field]: value }));
   }
 
   function handleEditField(field, value) {
-    setEditingUser((currentUser) =>
-      currentUser
-        ? {
-            ...currentUser,
-            [field]: value,
-          }
-        : currentUser,
-    );
+    setEditingUser((current) => (current ? { ...current, [field]: value } : current));
   }
 
-  async function handleCreateUser(event) {
-    event.preventDefault();
-
+  async function handleCreateUser(e) {
+    e.preventDefault();
     const nombre = createForm.nombre.trim();
     const correo = createForm.correo.trim().toLowerCase();
 
     if (!nombre || !correo || !createForm.rol || !createForm.contrasena) {
-      setMessage({
-        severity: 'error',
-        text: 'Completa nombre, correo, rol y contraseña inicial.',
-      });
+      setMessage({ severity: 'error', text: 'Completa nombre, correo, rol y contraseña inicial.' });
       return;
     }
 
     if (createForm.contrasena.length < 8) {
-      setMessage({
-        severity: 'error',
-        text: 'La contraseña debe tener al menos 8 caracteres.',
-      });
+      setMessage({ severity: 'error', text: 'La contraseña debe tener al menos 8 caracteres.' });
       return;
     }
 
     if (!beginWrite()) return;
-
     let createdUser = null;
 
     try {
@@ -417,30 +447,24 @@ function UserManagementPage() {
         }),
       });
 
-      createdUser = toFrontendUser(result.data);
+      createdUser = toFrontendUser(result.data || result);
       putUser(createdUser);
       setSelectedUser(createdUser);
       setEditingUser({ ...createdUser });
       setCreateForm({ ...EMPTY_CREATE_FORM });
 
       if (createForm.estatus === 'INACTIVO') {
-        const statusResult = await apiRequest(
-          `/usuarios/${createdUser.id}/estatus`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify({ activo: false }),
-          },
-        );
-        createdUser = toFrontendUser(statusResult.data);
+        const statusResult = await apiRequest(`/usuarios/${createdUser.id}/estatus`, {
+          method: 'PATCH',
+          body: JSON.stringify({ activo: false }),
+        });
+        createdUser = toFrontendUser(statusResult.data || statusResult);
         putUser(createdUser);
         setSelectedUser(createdUser);
         setEditingUser({ ...createdUser });
       }
 
-      setMessage({
-        severity: 'success',
-        text: 'Usuario creado correctamente.',
-      });
+      setMessage({ severity: 'success', text: 'Usuario creado correctamente.' });
     } catch (error) {
       setMessage({
         severity: createdUser ? 'warning' : 'error',
@@ -451,23 +475,19 @@ function UserManagementPage() {
     }
   }
 
-  async function handleSaveChanges(event) {
-    event.preventDefault();
+  async function handleSaveChanges(e) {
+    e.preventDefault();
     if (!editingUser || !selectedUser) return;
 
     const nombre = editingUser.nombre.trim();
     const correo = editingUser.correo.trim().toLowerCase();
 
     if (!nombre || !correo || !editingUser.rol) {
-      setMessage({
-        severity: 'error',
-        text: 'Completa nombre, correo y rol.',
-      });
+      setMessage({ severity: 'error', text: 'Completa nombre, correo y rol.' });
       return;
     }
 
     if (!beginWrite()) return;
-
     const desiredStatus = editingUser.estatus;
 
     try {
@@ -480,38 +500,22 @@ function UserManagementPage() {
         }),
       });
 
-      let updatedUser = {
-        ...selectedUser,
-        ...toFrontendUser(result.data),
-      };
+      let updatedUser = { ...selectedUser, ...toFrontendUser(result.data || result) };
 
       if (desiredStatus !== updatedUser.estatus) {
-        const statusResult = await apiRequest(
-          `/usuarios/${updatedUser.id}/estatus`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify({ activo: desiredStatus === 'ACTIVO' }),
-          },
-        );
-        updatedUser = {
-          ...updatedUser,
-          ...toFrontendUser(statusResult.data),
-        };
+        const statusResult = await apiRequest(`/usuarios/${updatedUser.id}/estatus`, {
+          method: 'PATCH',
+          body: JSON.stringify({ activo: desiredStatus === 'ACTIVO' }),
+        });
+        updatedUser = { ...updatedUser, ...toFrontendUser(statusResult.data || statusResult) };
       }
 
       putUser(updatedUser);
       setSelectedUser(updatedUser);
       setEditingUser({ ...updatedUser });
-
-      setMessage({
-        severity: 'success',
-        text: 'Cambios guardados correctamente.',
-      });
+      setMessage({ severity: 'success', text: 'Cambios guardados correctamente.' });
     } catch (error) {
-      setMessage({
-        severity: 'error',
-        text: error.message || 'No fue posible guardar los cambios.',
-      });
+      setMessage({ severity: 'error', text: error.message || 'No fue posible guardar los cambios.' });
     } finally {
       endWrite();
     }
@@ -519,7 +523,6 @@ function UserManagementPage() {
 
   async function toggleUserStatus(user) {
     if (!beginWrite()) return;
-
     const nextActive = user.estatus !== 'ACTIVO';
 
     try {
@@ -528,11 +531,7 @@ function UserManagementPage() {
         body: JSON.stringify({ activo: nextActive }),
       });
 
-      const updatedUser = {
-        ...user,
-        ...toFrontendUser(result.data),
-      };
-
+      const updatedUser = { ...user, ...toFrontendUser(result.data || result) };
       putUser(updatedUser);
 
       if (selectedUser?.id === user.id) {
@@ -542,15 +541,10 @@ function UserManagementPage() {
 
       setMessage({
         severity: 'success',
-        text: nextActive
-          ? 'Usuario activado correctamente.'
-          : 'Usuario desactivado correctamente.',
+        text: nextActive ? 'Usuario activado correctamente.' : 'Usuario desactivado correctamente.',
       });
     } catch (error) {
-      setMessage({
-        severity: 'error',
-        text: error.message || 'No fue posible cambiar el estatus.',
-      });
+      setMessage({ severity: 'error', text: error.message || 'No fue posible cambiar el estatus.' });
     } finally {
       endWrite();
     }
@@ -558,28 +552,18 @@ function UserManagementPage() {
 
   async function handleConfirmDelete() {
     if (!userToDelete || !beginWrite()) return;
-
     try {
-      // Llamada DELETE definitiva al backend
-      await apiRequest(`/usuarios/${userToDelete.id}`, {
-        method: 'DELETE',
-      });
-
+      await apiRequest(`/usuarios/${userToDelete.id}`, { method: 'DELETE' });
       setUsers((current) => current.filter((u) => u.id !== userToDelete.id));
-
       if (selectedUser?.id === userToDelete.id) {
         closeDetail();
       }
-
       setMessage({
         severity: 'success',
-        text: `El usuario "${userToDelete.nombre}" ha sido eliminado definitivamente.`,
+        text: `El usuario ${userToDelete.nombre} ha sido eliminado definitivamente.`,
       });
     } catch (err) {
-      setMessage({
-        severity: 'error',
-        text: err.message || 'No fue posible eliminar al usuario.',
-      });
+      setMessage({ severity: 'error', text: err.message || 'No fue posible eliminar al usuario.' });
     } finally {
       setUserToDelete(null);
       endWrite();
@@ -588,192 +572,9 @@ function UserManagementPage() {
 
   return (
     <DashboardLayout>
-      <Box sx={{ pb: 3 }}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              xl: 'repeat(4, minmax(0, 1fr))',
-            },
-            gap: 1.5,
-            mb: 1.5,
-          }}
-        >
-          <RoleSummaryCard
-            icon={<GroupOutlined />}
-            label="Supervisores"
-            value={totals.supervisores}
-            detail="Supervisores y administradores activos"
-            color="#1674B7"
-          />
-
-          <RoleSummaryCard
-            icon={<LocationOnOutlined />}
-            label="Distribuidores"
-            value={totals.distribuidores}
-            detail="Distribuidores activos"
-            color="#168A4A"
-          />
-
-          <RoleSummaryCard
-            icon={<LaptopOutlined />}
-            label="ISM/MESA"
-            value={totals.ismMesa}
-            detail="ISM/MESA activos"
-            color="#8B5CF6"
-          />
-
-          <RoleSummaryCard
-            icon={<PersonRemoveOutlined />}
-            label="Usuarios inactivos"
-            value={totals.inactivos}
-            detail="Cuentas desactivadas"
-            color="#DC2626"
-          />
-        </Box>
-
-        <Paper
-          component="form"
-          onSubmit={handleCreateUser}
-          sx={{
-            ...panelSx,
-            p: 2.25,
-            mb: 1.5,
-          }}
-        >
-          <Typography
-            component="h1"
-            sx={{
-              mb: 1.6,
-              color: 'text.primary',
-              fontSize: '1.1rem',
-              fontWeight: 800,
-            }}
-          >
-            Alta de usuario
-          </Typography>
-
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: 'repeat(2, minmax(0, 1fr))',
-                xl:
-                  'minmax(180px, 1fr) ' +
-                  'minmax(220px, 1.15fr) ' +
-                  'minmax(150px, 0.7fr) ' +
-                  'minmax(130px, 0.6fr) ' +
-                  'minmax(180px, 0.9fr) auto',
-              },
-              gap: 1.25,
-              alignItems: 'start',
-            }}
-          >
-            <TextField
-              label="Nombre completo"
-              value={createForm.nombre}
-              onChange={(event) =>
-                handleCreateField('nombre', event.target.value)
-              }
-              fullWidth
-              required
-              disabled={busy}
-              size="small"
-              sx={fieldSx}
-            />
-
-            <TextField
-              label="Usuario / correo"
-              type="email"
-              value={createForm.correo}
-              onChange={(event) =>
-                handleCreateField('correo', event.target.value)
-              }
-              fullWidth
-              required
-              disabled={busy}
-              size="small"
-              sx={fieldSx}
-            />
-
-            <FormControl fullWidth required size="small" disabled={busy}>
-              <InputLabel id="create-role-label">Rol</InputLabel>
-              <Select
-                labelId="create-role-label"
-                label="Rol"
-                value={createForm.rol}
-                onChange={(event) =>
-                  handleCreateField('rol', event.target.value)
-                }
-                sx={{ minHeight: 46, fontSize: '0.9rem' }}
-              >
-                {ROLES.map((role) => (
-                  <MenuItem key={role.value} value={role.value}>
-                    {role.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth size="small" disabled={busy}>
-              <InputLabel id="create-status-label">Estatus</InputLabel>
-              <Select
-                labelId="create-status-label"
-                label="Estatus"
-                value={createForm.estatus}
-                onChange={(event) =>
-                  handleCreateField('estatus', event.target.value)
-                }
-                sx={{ minHeight: 46, fontSize: '0.9rem' }}
-              >
-                <MenuItem value="ACTIVO">Activo</MenuItem>
-                <MenuItem value="INACTIVO">Inactivo</MenuItem>
-              </Select>
-            </FormControl>
-
-            <TextField
-              label="Contraseña inicial"
-              type="password"
-              autoComplete="new-password"
-              value={createForm.contrasena}
-              onChange={(event) =>
-                handleCreateField('contrasena', event.target.value)
-              }
-              fullWidth
-              required
-              disabled={busy}
-              size="small"
-              slotProps={{ htmlInput: { minLength: 8 } }}
-              sx={fieldSx}
-            />
-
-            <Button
-              type="submit"
-              variant="contained"
-              startIcon={
-                saving ? (
-                  <CircularProgress size={18} color="inherit" />
-                ) : (
-                  <AddOutlined />
-                )
-              }
-              disabled={busy}
-              sx={primaryButtonSx}
-            >
-              {saving ? 'Guardando...' : 'Crear usuario'}
-            </Button>
-          </Box>
-        </Paper>
-
+      <Box sx={{ pb: 4, pt: 0.5, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         {message && (
-          <Alert
-            severity={message.severity}
-            onClose={() => setMessage(null)}
-            sx={{ mb: 1.5 }}
-          >
+          <Alert severity={message.severity} onClose={() => setMessage(null)} sx={{ borderRadius: 2 }}>
             {message.text}
           </Alert>
         )}
@@ -781,325 +582,406 @@ function UserManagementPage() {
         {loadError && (
           <Alert
             severity="error"
-            sx={{ mb: 1.5 }}
             action={
-              <Button color="inherit" onClick={loadUsers} disabled={busy}>
+              <Button color="inherit" size="small" onClick={loadUsers} disabled={busy}>
                 Reintentar
               </Button>
             }
+            sx={{ borderRadius: 2 }}
           >
             {loadError}
           </Alert>
         )}
 
+        {/* 1. KPIs de roles con animación hover e imágenes */}
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              xl: 'minmax(0, 1fr) 330px',
-            },
-            gap: 1.5,
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+            gap: 2,
+          }}
+        >
+          <KpiCard
+            label="Supervisores"
+            value={totals.supervisores}
+            sub="Supervisores y administradores"
+            bg="#EAF2FA"
+            color="#155E9C"
+            imgSrc="/supervisor.webp"
+          />
+          <KpiCard
+            label="Distribuidores"
+            value={totals.distribuidores}
+            sub="Distribuidores activos"
+            bg="#E9F9F1"
+            color="#0E9F6E"
+            Icon={LocationOnOutlined}
+          />
+          <KpiCard
+            label="ISM/MESA"
+            value={totals.ismMesa}
+            sub="Técnicos activos"
+            bg="#EFEDFA"
+            color="#6D5BD0"
+            Icon={LaptopOutlined}
+          />
+          <KpiCard
+            label="Usuarios inactivos"
+            value={totals.inactivos}
+            sub="Cuentas desactivadas"
+            bg="#FDECEA"
+            color="#C0392B"
+            Icon={PersonRemoveOutlined}
+          />
+        </Box>
+
+        {/* 2. Alta de usuario (Fila horizontal equilibrada) */}
+        <Paper elevation={0} sx={{ ...cardSx, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: `1px solid ${T.border}`,
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: '0.9rem', fontWeight: 700, color: T.text }}>
+                Alta de usuario
+              </Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: T.text3 }}>
+                La contraseña se cifra con bcrypt antes de guardarse
+              </Typography>
+            </Box>
+            <Chip
+              label="Cuenta nueva"
+              size="small"
+              sx={{ bgcolor: '#EAF2FA', color: '#155E9C', fontWeight: 700, fontSize: '0.7rem', borderRadius: 2 }}
+            />
+          </Box>
+
+          <Box
+            component="form"
+            onSubmit={handleCreateUser}
+            sx={{
+              p: 3,
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(2, 1fr)',
+                lg: '1.2fr 1.3fr 1fr 0.9fr 1.1fr auto',
+              },
+              gap: 2,
+              alignItems: 'center',
+            }}
+          >
+            <TextField
+              label="Nombre completo *"
+              placeholder="Ej. Ana Martínez"
+              size="small"
+              value={createForm.nombre}
+              onChange={(e) => handleCreateField('nombre', e.target.value)}
+              disabled={busy}
+              slotProps={{ input: { sx: { bgcolor: '#F8FAFC', borderRadius: 2, fontSize: '0.84rem' } } }}
+            />
+
+            <TextField
+              label="Usuario / correo *"
+              placeholder="ana@execon.mx"
+              type="email"
+              size="small"
+              value={createForm.correo}
+              onChange={(e) => handleCreateField('correo', e.target.value)}
+              disabled={busy}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailOutlined sx={{ fontSize: 16, color: T.text3 }} />
+                    </InputAdornment>
+                  ),
+                  sx: { bgcolor: '#F8FAFC', borderRadius: 2, fontSize: '0.84rem' },
+                },
+              }}
+            />
+
+            <FormControl size="small" disabled={busy}>
+              <InputLabel id="crear-rol-label">Rol *</InputLabel>
+              <Select
+                labelId="crear-rol-label"
+                label="Rol *"
+                value={createForm.rol}
+                onChange={(e) => handleCreateField('rol', e.target.value)}
+                sx={{ bgcolor: '#F8FAFC', borderRadius: 2, fontSize: '0.84rem' }}
+              >
+                {ROLES.map((r) => (
+                  <MenuItem key={r.value} value={r.value} sx={{ fontSize: '0.84rem' }}>
+                    {r.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" disabled={busy}>
+              <InputLabel id="crear-estatus-label">Estatus</InputLabel>
+              <Select
+                labelId="crear-estatus-label"
+                label="Estatus"
+                value={createForm.estatus}
+                onChange={(e) => handleCreateField('estatus', e.target.value)}
+                sx={{ bgcolor: '#F8FAFC', borderRadius: 2, fontSize: '0.84rem' }}
+              >
+                <MenuItem value="ACTIVO" sx={{ fontSize: '0.84rem' }}>Activo</MenuItem>
+                <MenuItem value="INACTIVO" sx={{ fontSize: '0.84rem' }}>Inactivo</MenuItem>
+              </Select>
+            </FormControl>
+
+            <TextField
+              label="Contraseña inicial *"
+              placeholder="••••••••"
+              type="password"
+              size="small"
+              value={createForm.contrasena}
+              onChange={(e) => handleCreateField('contrasena', e.target.value)}
+              disabled={busy}
+              slotProps={{
+                htmlInput: { minLength: 8 },
+                input: { sx: { bgcolor: '#F8FAFC', borderRadius: 2, fontSize: '0.84rem' } },
+              }}
+            />
+
+            <Button
+              type="submit"
+              variant="contained"
+              disableElevation
+              disabled={busy}
+              startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
+              sx={{
+                bgcolor: T.primary,
+                textTransform: 'none',
+                fontWeight: 800,
+                fontSize: '0.86rem',
+                borderRadius: 2,
+                height: 40,
+                px: 2.5,
+                whiteSpace: 'nowrap',
+                '&:hover': { bgcolor: '#002642' },
+              }}
+            >
+              Crear usuario
+            </Button>
+          </Box>
+        </Paper>
+
+        {/* 3. Layout Maestro-Detalle (Tabla + Panel lateral sticky) */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: selectedUser ? '1fr 340px' : '1fr' },
+            gap: 2.5,
             alignItems: 'start',
           }}
         >
-          <Paper sx={{ ...panelSx, overflow: 'hidden' }}>
+          {/* Tabla de usuarios */}
+          <Paper elevation={0} sx={{ ...cardSx, overflow: 'hidden' }}>
             <Box
               sx={{
-                px: 2,
-                py: 1.5,
+                px: 3,
+                py: 2,
                 display: 'flex',
                 flexDirection: { xs: 'column', md: 'row' },
-                alignItems: { xs: 'stretch', md: 'center' },
                 justifyContent: 'space-between',
-                gap: 1.25,
-                borderBottom: '1px solid',
-                borderColor: 'divider',
+                alignItems: { xs: 'flex-start', md: 'center' },
+                gap: 2,
+                borderBottom: `1px solid ${T.border}`,
               }}
             >
-              <Typography
-                component="h2"
-                sx={{
-                  color: 'text.primary',
-                  fontSize: '1.1rem',
-                  fontWeight: 800,
-                }}
-              >
-                Usuarios registrados
-              </Typography>
+              <Box>
+                <Typography sx={{ fontSize: '0.9rem', fontWeight: 700, color: T.text }}>
+                  Usuarios registrados
+                </Typography>
+                <Typography sx={{ fontSize: '0.72rem', color: T.text3 }}>
+                  Haz clic en una fila para consultar o editar su información
+                </Typography>
+              </Box>
 
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <TextField
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar usuario..."
-                  size="small"
-                  disabled={busy}
-                  sx={{
-                    ...fieldSx,
-                    minWidth: { xs: 0, sm: 220 },
-                    flex: 1,
-                  }}
-                  slotProps={{
-                    htmlInput: { 'aria-label': 'Buscar usuarios' },
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchOutlined
-                            sx={{ color: 'text.secondary', fontSize: 21 }}
-                          />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <FormControl size="small" disabled={busy} sx={{ minWidth: 175 }}>
-                  <InputLabel id="users-role-filter-label">
-                    Filtrar por rol
-                  </InputLabel>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center">
+                <FormControl size="small" sx={{ minWidth: 160 }}>
                   <Select
-                    labelId="users-role-filter-label"
-                    label="Filtrar por rol"
                     value={roleFilter}
-                    onChange={(event) => setRoleFilter(event.target.value)}
+                    onChange={(e) => setRoleFilter(e.target.value)}
                     startAdornment={
                       <InputAdornment position="start">
-                        <TuneOutlined
-                          sx={{ color: 'text.secondary', fontSize: 20 }}
-                        />
+                        <TuneOutlined sx={{ fontSize: 16, color: T.text3 }} />
                       </InputAdornment>
                     }
-                    sx={{ minHeight: 46, fontSize: '0.86rem' }}
+                    sx={{ bgcolor: T.head, borderRadius: 2, fontSize: '0.8rem' }}
                   >
-                    <MenuItem value="TODOS">Todos los roles</MenuItem>
-                    {ROLES.map((role) => (
-                      <MenuItem key={role.value} value={role.value}>
-                        {role.label}
+                    <MenuItem value="TODOS" sx={{ fontSize: '0.8rem' }}>Todos los roles</MenuItem>
+                    {ROLES.map((r) => (
+                      <MenuItem key={r.value} value={r.value} sx={{ fontSize: '0.8rem' }}>
+                        {r.label}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
+
+                <TextField
+                  size="small"
+                  placeholder="Buscar usuario…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchOutlined sx={{ fontSize: 18, color: T.text3 }} />
+                        </InputAdornment>
+                      ),
+                      sx: { bgcolor: T.head, borderRadius: 2, fontSize: '0.8rem' },
+                    },
+                  }}
+                  sx={{ minWidth: { xs: '100%', sm: 220 } }}
+                />
               </Stack>
             </Box>
 
-            {(search || roleFilter !== 'TODOS') && (
-              <Box
-                sx={{
-                  px: 2,
-                  py: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 1,
-                }}
-              >
-                <Typography sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
-                  {filteredUsers.length} coincidencias
-                </Typography>
-
-                <Button
-                  size="small"
-                  disabled={busy}
-                  onClick={() => {
-                    setSearch('');
-                    setRoleFilter('TODOS');
-                    setPage(0);
-                  }}
-                >
-                  Limpiar filtros
-                </Button>
-              </Box>
-            )}
-
             <TableContainer>
-              <Table
-                size="small"
-                sx={{
-                  minWidth: 800,
-                  '& th': {
-                    color: 'text.secondary',
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    whiteSpace: 'nowrap',
-                    bgcolor: 'action.hover',
-                  },
-                  '& td': {
-                    fontSize: '0.84rem',
-                    py: 1.1,
-                  },
-                }}
-              >
+              <Table size="small" sx={{ minWidth: 650 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Usuario</TableCell>
-                    <TableCell>Rol</TableCell>
-                    <TableCell>Estatus</TableCell>
-                    <TableCell>Último acceso</TableCell>
-                    <TableCell>Acciones</TableCell>
+                    <TableCell sx={thSx}>Usuario</TableCell>
+                    <TableCell sx={thSx}>Rol</TableCell>
+                    <TableCell sx={thSx}>Estatus</TableCell>
+                    <TableCell sx={thSx}>Último acceso</TableCell>
+                    <TableCell align="right" sx={thSx}>
+                      Acciones
+                    </TableCell>
                   </TableRow>
                 </TableHead>
 
                 <TableBody>
                   {loadingUsers ? (
                     <TableRow>
-                      <TableCell colSpan={5}>
-                        <Box
-                          sx={{
-                            minHeight: 240,
-                            display: 'grid',
-                            placeItems: 'center',
-                          }}
-                        >
-                          <CircularProgress size={32} />
-                        </Box>
+                      <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                        <CircularProgress size={28} sx={{ color: T.primary }} />
+                        <Typography sx={{ fontSize: '0.8rem', color: T.text3, mt: 1 }}>
+                          Cargando usuarios...
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  ) : loadError ? (
+                  ) : visibleUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} align="center" sx={{ height: 180 }}>
-                        No se pudo cargar la lista. Utiliza “Reintentar”.
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredUsers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5}>
-                        <Box
-                          sx={{
-                            minHeight: 240,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 1,
-                            textAlign: 'center',
-                          }}
-                        >
-                          <PersonOutlineOutlined
-                            sx={{ color: 'text.disabled', fontSize: 42 }}
-                          />
-                          <Typography sx={{ fontWeight: 800 }}>
-                            {users.length === 0
-                              ? 'No hay usuarios registrados'
-                              : 'No hay coincidencias con estos filtros'}
-                          </Typography>
-                          <Typography
-                            sx={{
-                              color: 'text.secondary',
-                              fontSize: '0.84rem',
-                            }}
-                          >
-                            {users.length === 0
-                              ? 'Utiliza el formulario de alta para crear un usuario.'
-                              : 'Cambia el rol seleccionado o borra la búsqueda.'}
-                          </Typography>
-                        </Box>
+                      <TableCell colSpan={5} align="center" sx={{ py: 6, border: 0 }}>
+                        <PersonOutlineOutlined sx={{ fontSize: 38, color: '#CBD5E1', mb: 0.5 }} />
+                        <Typography sx={{ fontSize: '0.86rem', fontWeight: 700, color: T.text2 }}>
+                          No se encontraron usuarios
+                        </Typography>
+                        <Typography sx={{ fontSize: '0.72rem', color: T.text3 }}>
+                          Intenta con otro filtro o agrega un usuario en el formulario superior.
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
                     visibleUsers.map((user) => {
                       const isActive = user.estatus === 'ACTIVO';
+                      const isSelected = selectedUser?.id === user.id;
 
                       return (
                         <TableRow
                           key={user.id}
                           hover
-                          selected={selectedUser?.id === user.id}
                           onClick={() => selectUser(user)}
-                          sx={{ cursor: saving ? 'default' : 'pointer' }}
+                          sx={{
+                            cursor: 'pointer',
+                            bgcolor: isSelected ? '#EAF2FA !important' : 'inherit',
+                            '&:last-child td, &:last-child th': { border: 0 },
+                          }}
                         >
-                          <TableCell>
-                            <Typography
-                              sx={{
-                                fontSize: '0.84rem',
-                                fontWeight: 700,
-                              }}
-                            >
-                              {user.nombre || 'Sin nombre'}
-                            </Typography>
-                            <Typography
-                              sx={{
-                                mt: 0.2,
-                                color: 'text.secondary',
-                                fontSize: '0.76rem',
-                              }}
-                            >
-                              {user.correo}
-                            </Typography>
+                          <TableCell sx={{ py: 1.4 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                              <Avatar
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  fontSize: '0.72rem',
+                                  fontWeight: 800,
+                                  background: 'linear-gradient(135deg,#1D6FB8,#14406A)',
+                                }}
+                              >
+                                {getInitials(user.nombre)}
+                              </Avatar>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography sx={{ fontSize: '0.82rem', fontWeight: 700, color: T.text }}>
+                                  {user.nombre || 'Sin nombre'}
+                                </Typography>
+                                <Typography sx={{ fontSize: '0.72rem', color: T.text3 }}>
+                                  {user.correo}
+                                </Typography>
+                              </Box>
+                            </Box>
                           </TableCell>
 
-                          <TableCell>{getRoleLabel(user.rol)}</TableCell>
+                          <TableCell sx={{ py: 1.4 }}>
+                            <RolBadge rol={user.rol} />
+                          </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ py: 1.4 }}>
                             <Chip
                               size="small"
                               label={isActive ? 'Activo' : 'Inactivo'}
-                              color={isActive ? 'success' : 'default'}
-                              variant="outlined"
-                              sx={{ minWidth: 75, fontWeight: 700 }}
+                              sx={{
+                                bgcolor: isActive ? '#E9F9F1' : '#F1F5F9',
+                                color: isActive ? '#0E9F6E' : '#64748B',
+                                fontWeight: 700,
+                                fontSize: '0.7rem',
+                                borderRadius: 5,
+                                height: 22,
+                              }}
                             />
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell sx={{ py: 1.4, fontSize: '0.78rem', color: T.text2 }}>
                             {formatDateTime(user.ultimoAcceso, locale)}
                           </TableCell>
 
-                          <TableCell>
-                            <Stack
-                              direction="row"
-                              spacing={0.6}
-                              sx={{ alignItems: 'center' }}
-                            >
-                              <Tooltip title="Editar usuario">
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    disabled={busy}
-                                    aria-label={`Editar a ${user.nombre}`}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      selectUser(user);
-                                    }}
-                                    color="primary"
-                                  >
-                                    <EditOutlined sx={{ fontSize: 20 }} />
-                                  </IconButton>
-                                </span>
+                          <TableCell align="right" sx={{ py: 1.4 }} onClick={(e) => e.stopPropagation()}>
+                            <Stack direction="row" spacing={0.6} justifyContent="flex-end">
+                              <Tooltip title="Editar">
+                                <IconButton size="small" onClick={() => selectUser(user)} sx={iconBtnSx}>
+                                  <EditOutlined fontSize="small" />
+                                </IconButton>
                               </Tooltip>
 
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={busy}
-                                color={isActive ? 'warning' : 'success'}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  toggleUserStatus(user);
-                                }}
-                                sx={{
-                                  minHeight: 32,
-                                  fontSize: '0.72rem',
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {isActive ? 'Desactivar' : 'Reactivar'}
-                              </Button>
+                              <Tooltip title={isActive ? 'Desactivar' : 'Activar'}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => toggleUserStatus(user)}
+                                  disabled={busy}
+                                  sx={{
+                                    ...iconBtnSx,
+                                    color: isActive ? '#B45309' : '#0E9F6E',
+                                  }}
+                                >
+                                  <PersonRemoveOutlined fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
 
-                              <Tooltip title="Eliminar usuario">
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    disabled={busy}
-                                    color="error"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setUserToDelete(user);
-                                    }}
-                                  >
-                                    <DeleteOutlineOutlined sx={{ fontSize: 20 }} />
-                                  </IconButton>
-                                </span>
+                              <Tooltip title="Eliminar">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => setUserToDelete(user)}
+                                  disabled={busy}
+                                  sx={{
+                                    ...iconBtnSx,
+                                    color: '#DC2626',
+                                    '&:hover': { bgcolor: '#FDECEA', borderColor: '#F5C6C0' },
+                                  }}
+                                >
+                                  <DeleteOutlineOutlined fontSize="small" />
+                                </IconButton>
                               </Tooltip>
                             </Stack>
                           </TableCell>
@@ -1111,52 +993,252 @@ function UserManagementPage() {
               </Table>
             </TableContainer>
 
-            <TablePagination
-              component="div"
-              count={filteredUsers.length}
-              page={effectivePage}
-              rowsPerPage={rowsPerPage}
-              rowsPerPageOptions={[]}
-              onPageChange={(_, nextPage) => setPage(nextPage)}
-              labelDisplayedRows={({ from, to, count }) =>
-                `${from}–${to} de ${count}`
-              }
-            />
+            {/* Paginación */}
+            <Box
+              sx={{
+                px: 3,
+                py: 1.6,
+                borderTop: `1px solid ${T.border}`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography sx={{ fontSize: '0.74rem', color: T.text3 }}>
+                {filteredUsers.length === 0
+                  ? '0 registros'
+                  : `${effectivePage * rowsPerPage + 1}–${Math.min(
+                      (effectivePage + 1) * rowsPerPage,
+                      filteredUsers.length
+                    )} de ${filteredUsers.length} usuarios`}
+              </Typography>
+
+              <Stack direction="row" spacing={1}>
+                <IconButton
+                  size="small"
+                  disabled={effectivePage <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  sx={iconBtnSx}
+                >
+                  <NavigateBefore fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  disabled={effectivePage >= lastPage}
+                  onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                  sx={iconBtnSx}
+                >
+                  <NavigateNext fontSize="small" />
+                </IconButton>
+              </Stack>
+            </Box>
           </Paper>
 
-          <UserDetailPanel
-            selectedUser={selectedUser}
-            editingUser={editingUser}
-            onClose={closeDetail}
-            onEditField={handleEditField}
-            onSave={handleSaveChanges}
-            onToggleStatus={toggleUserStatus}
-            onDelete={(user) => setUserToDelete(user)}
-            locale={locale}
-            saving={busy}
-          />
+          {/* Panel Lateral: Detalle / Edición Sticky */}
+          {selectedUser && editingUser && (
+            <Paper
+              elevation={0}
+              component="form"
+              onSubmit={handleSaveChanges}
+              sx={{
+                ...cardSx,
+                position: 'sticky',
+                top: 16,
+                overflow: 'hidden',
+              }}
+            >
+              {/* Hero del usuario seleccionado */}
+              <Box
+                sx={{
+                  p: 3,
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  borderBottom: `1px solid ${T.border}`,
+                  position: 'relative',
+                }}
+              >
+                <IconButton
+                  size="small"
+                  onClick={closeDetail}
+                  sx={{ position: 'absolute', top: 12, right: 12, color: T.text3 }}
+                >
+                  <CloseOutlined fontSize="small" />
+                </IconButton>
+
+                <Avatar
+                  sx={{
+                    width: 56,
+                    height: 56,
+                    fontSize: '1.2rem',
+                    fontWeight: 800,
+                    background: 'linear-gradient(135deg,#1D6FB8,#14406A)',
+                    mb: 1.2,
+                  }}
+                >
+                  {getInitials(editingUser.nombre)}
+                </Avatar>
+                <Typography sx={{ fontSize: '0.96rem', fontWeight: 800, color: T.text }}>
+                  {editingUser.nombre || 'Sin nombre'}
+                </Typography>
+                <Typography sx={{ fontSize: '0.74rem', color: T.text3 }}>{editingUser.correo}</Typography>
+                <Box sx={{ mt: 1 }}>
+                  <RolBadge rol={editingUser.rol} />
+                </Box>
+              </Box>
+
+              {/* Formulario de edición rápida */}
+              <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Nombre completo"
+                  value={editingUser.nombre}
+                  onChange={(e) => handleEditField('nombre', e.target.value)}
+                  disabled={saving}
+                  slotProps={{ input: { sx: { borderRadius: 2, fontSize: '0.84rem' } } }}
+                />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Correo / Usuario"
+                  value={editingUser.correo}
+                  onChange={(e) => handleEditField('correo', e.target.value)}
+                  disabled={saving}
+                  slotProps={{ input: { sx: { borderRadius: 2, fontSize: '0.84rem' } } }}
+                />
+
+                <FormControl fullWidth size="small" disabled={saving}>
+                  <InputLabel id="edit-rol-label">Rol</InputLabel>
+                  <Select
+                    labelId="edit-rol-label"
+                    label="Rol"
+                    value={editingUser.rol}
+                    onChange={(e) => handleEditField('rol', e.target.value)}
+                    sx={{ borderRadius: 2, fontSize: '0.84rem' }}
+                  >
+                    {ROLES.map((r) => (
+                      <MenuItem key={r.value} value={r.value} sx={{ fontSize: '0.84rem' }}>
+                        {r.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    p: 1.5,
+                    bgcolor: T.head,
+                    borderRadius: 2,
+                    border: `1px solid ${T.border}`,
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontSize: '0.76rem', fontWeight: 700, color: T.text }}>
+                      Estatus de la cuenta
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.68rem', color: T.text3 }}>
+                      {editingUser.estatus === 'ACTIVO' ? 'Permite acceso al sistema' : 'Acceso bloqueado'}
+                    </Typography>
+                  </Box>
+                  <Switch
+                    checked={editingUser.estatus === 'ACTIVO'}
+                    onChange={(e) => handleEditField('estatus', e.target.checked ? 'ACTIVO' : 'INACTIVO')}
+                    disabled={saving}
+                    size="small"
+                  />
+                </Box>
+
+                <Divider sx={{ my: 0.5 }} />
+
+                {/* Metadatos */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                  <Box>
+                    <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: T.text3, textTransform: 'uppercase' }}>
+                      Último acceso
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.76rem', color: T.text, mt: 0.3 }}>
+                      {formatDateTime(selectedUser.ultimoAcceso, locale)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: T.text3, textTransform: 'uppercase' }}>
+                      Fecha de alta
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.76rem', color: T.text, mt: 0.3 }}>
+                      {formatDateTime(selectedUser.fechaCreacion, locale)}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Botones de acción */}
+                <Stack direction="row" spacing={1.2} sx={{ mt: 1 }}>
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    color="error"
+                    fullWidth
+                    disabled={saving}
+                    onClick={() => setUserToDelete(selectedUser)}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
+                      borderRadius: 2,
+                    }}
+                  >
+                    Eliminar
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    fullWidth
+                    disabled={saving}
+                    sx={{
+                      bgcolor: T.primary,
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      fontSize: '0.8rem',
+                      borderRadius: 2,
+                      '&:hover': { bgcolor: '#002642' },
+                    }}
+                  >
+                    {saving ? <CircularProgress size={16} color="inherit" /> : 'Guardar'}
+                  </Button>
+                </Stack>
+              </Box>
+            </Paper>
+          )}
         </Box>
 
-        {/* Diálogo de Confirmación para Eliminar */}
+        {/* Diálogo de Confirmación para Eliminar Usuario */}
         <Dialog
           open={Boolean(userToDelete)}
           onClose={() => !saving && setUserToDelete(null)}
+          maxWidth="xs"
+          fullWidth
+          slotProps={{ paper: { sx: { borderRadius: 2.5, p: 1 } } }}
         >
-          <DialogTitle sx={{ fontWeight: 800, color: '#DC2626' }}>
+          <DialogTitle sx={{ fontWeight: 800, color: '#DC2626', fontSize: '1.05rem' }}>
             ¿Eliminar usuario?
           </DialogTitle>
           <DialogContent>
-            <DialogContentText>
+            <DialogContentText sx={{ fontSize: '0.86rem', color: T.text2 }}>
               Estás a punto de eliminar definitivamente la cuenta de{' '}
-              <strong>{userToDelete?.nombre}</strong> ({userToDelete?.correo}).
-              Esta acción no se puede deshacer.
+              <strong>{userToDelete?.nombre}</strong> ({userToDelete?.correo}). Esta acción no se puede deshacer.
             </DialogContentText>
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
             <Button
               onClick={() => setUserToDelete(null)}
               disabled={saving}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: 'none', color: T.text2, fontWeight: 700 }}
             >
               Cancelar
             </Button>
@@ -1165,7 +1247,7 @@ function UserManagementPage() {
               variant="contained"
               color="error"
               disabled={saving}
-              sx={{ textTransform: 'none', fontWeight: 800 }}
+              sx={{ textTransform: 'none', fontWeight: 800, borderRadius: 2 }}
             >
               {saving ? 'Eliminando...' : 'Sí, eliminar'}
             </Button>
@@ -1175,320 +1257,3 @@ function UserManagementPage() {
     </DashboardLayout>
   );
 }
-
-function RoleSummaryCard({ icon, label, value, detail, color }) {
-  return (
-    <Paper
-      sx={{
-        ...panelSx,
-        position: 'relative',
-        minHeight: 108,
-        overflow: 'hidden',
-      }}
-    >
-      <Box sx={{ p: 1.75, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Box
-          sx={{
-            width: 48,
-            height: 48,
-            display: 'grid',
-            placeItems: 'center',
-            borderRadius: 1.5,
-            bgcolor: 'action.hover',
-            color,
-            flexShrink: 0,
-            '& svg': { fontSize: 27 },
-          }}
-        >
-          {icon}
-        </Box>
-
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: '0.94rem', fontWeight: 700 }}>
-            {label}
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 0.4,
-              color,
-              fontSize: '1.78rem',
-              lineHeight: 1.1,
-              fontWeight: 800,
-            }}
-          >
-            {value}
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 0.4,
-              color: 'text.secondary',
-              fontSize: '0.7rem',
-            }}
-          >
-            {detail}
-          </Typography>
-        </Box>
-      </Box>
-
-      <Box
-        sx={{
-          position: 'absolute',
-          right: 0,
-          bottom: 0,
-          left: 0,
-          height: 4,
-          bgcolor: color,
-        }}
-      />
-    </Paper>
-  );
-}
-
-function UserDetailPanel({
-  selectedUser,
-  editingUser,
-  onClose,
-  onEditField,
-  onSave,
-  onToggleStatus,
-  onDelete,
-  locale,
-  saving,
-}) {
-  if (!selectedUser || !editingUser) {
-    return (
-      <Paper sx={{ ...panelSx, minHeight: 420, p: 2 }}>
-        <Typography component="h2" sx={{ fontSize: '1.05rem', fontWeight: 800 }}>
-          Detalle / edición
-        </Typography>
-
-        <Box
-          sx={{
-            minHeight: 330,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 1,
-            textAlign: 'center',
-          }}
-        >
-          <PersonOutlineOutlined sx={{ color: 'text.disabled', fontSize: 44 }} />
-          <Typography sx={{ color: 'text.secondary', fontWeight: 700 }}>
-            Selecciona un usuario
-          </Typography>
-          <Typography
-            sx={{
-              color: 'text.secondary',
-              fontSize: '0.78rem',
-              lineHeight: 1.5,
-            }}
-          >
-            Haz clic en un registro para consultar o editar su información.
-          </Typography>
-        </Box>
-      </Paper>
-    );
-  }
-
-  const draftActive = editingUser.estatus === 'ACTIVO';
-  const savedActive = selectedUser.estatus === 'ACTIVO';
-  const knownRole = ROLES.some((role) => role.value === editingUser.rol);
-
-  return (
-    <Paper component="form" onSubmit={onSave} sx={{ ...panelSx, p: 2 }}>
-      <Stack
-        direction="row"
-        sx={{
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          mb: 1.6,
-        }}
-      >
-        <Typography component="h2" sx={{ fontSize: '1.05rem', fontWeight: 800 }}>
-          Detalle / edición
-        </Typography>
-
-        <IconButton
-          size="small"
-          onClick={onClose}
-          disabled={saving}
-          aria-label="Cerrar detalle"
-        >
-          <CloseOutlined />
-        </IconButton>
-      </Stack>
-
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Avatar
-          sx={{
-            width: 44,
-            height: 44,
-            bgcolor: 'primary.main',
-            color: 'primary.contrastText',
-            fontSize: '0.82rem',
-            fontWeight: 800,
-          }}
-        >
-          {getInitials(editingUser.nombre)}
-        </Avatar>
-
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography noWrap sx={{ fontSize: '0.84rem', fontWeight: 800 }}>
-            {editingUser.nombre}
-          </Typography>
-
-          <Typography noWrap sx={{ color: 'text.secondary', fontSize: '0.74rem' }}>
-            {editingUser.correo}
-          </Typography>
-        </Box>
-
-        <Chip
-          size="small"
-          label={savedActive ? 'Activo' : 'Inactivo'}
-          color={savedActive ? 'success' : 'default'}
-          variant="outlined"
-        />
-      </Stack>
-
-      <Divider sx={{ my: 1.75 }} />
-
-      <Stack spacing={1.5}>
-        <TextField
-          label="Nombre completo"
-          value={editingUser.nombre}
-          onChange={(event) => onEditField('nombre', event.target.value)}
-          fullWidth
-          required
-          size="small"
-          disabled={saving}
-          sx={fieldSx}
-        />
-
-        <TextField
-          label="Usuario / correo"
-          type="email"
-          value={editingUser.correo}
-          onChange={(event) => onEditField('correo', event.target.value)}
-          fullWidth
-          required
-          size="small"
-          disabled={saving}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <EmailOutlined sx={{ color: 'text.secondary', fontSize: 20 }} />
-                </InputAdornment>
-              ),
-            },
-          }}
-          sx={fieldSx}
-        />
-
-        <FormControl fullWidth required size="small" disabled={saving}>
-          <InputLabel id="edit-role-label">Rol</InputLabel>
-          <Select
-            labelId="edit-role-label"
-            value={editingUser.rol}
-            label="Rol"
-            onChange={(event) => onEditField('rol', event.target.value)}
-            sx={{ minHeight: 46, fontSize: '0.86rem' }}
-          >
-            {!knownRole && (
-              <MenuItem value={editingUser.rol}>
-                {getRoleLabel(editingUser.rol)}
-              </MenuItem>
-            )}
-
-            {ROLES.map((role) => (
-              <MenuItem key={role.value} value={role.value}>
-                {role.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <Stack direction="row" spacing={0.8} sx={{ alignItems: 'center' }}>
-          <Switch
-            checked={draftActive}
-            disabled={saving}
-            onChange={(event) =>
-              onEditField('estatus', event.target.checked ? 'ACTIVO' : 'INACTIVO')
-            }
-          />
-          <Typography sx={{ color: 'text.secondary', fontSize: '0.84rem' }}>
-            {draftActive ? 'Activo' : 'Inactivo'}
-          </Typography>
-        </Stack>
-
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 1.25,
-          }}
-        >
-          <DetailInfo
-            label="Último acceso"
-            value={formatDateTime(selectedUser.ultimoAcceso, locale)}
-          />
-
-          <DetailInfo
-            label="Fecha de creación"
-            value={formatDateTime(selectedUser.fechaCreacion, locale)}
-          />
-        </Box>
-      </Stack>
-
-      <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-        <Button
-          type="button"
-          variant="outlined"
-          color="error"
-          fullWidth
-          disabled={saving}
-          onClick={() => onDelete(selectedUser)}
-          sx={{ minHeight: 44, fontSize: '0.8rem', fontWeight: 700 }}
-        >
-          Eliminar
-        </Button>
-
-        <Button
-          type="submit"
-          variant="contained"
-          fullWidth
-          disabled={saving}
-          sx={{ minHeight: 44, fontSize: '0.8rem', fontWeight: 700 }}
-        >
-          {saving ? 'Guardando...' : 'Guardar cambios'}
-        </Button>
-      </Stack>
-    </Paper>
-  );
-}
-
-function DetailInfo({ label, value }) {
-  return (
-    <Box>
-      <Typography
-        sx={{
-          color: 'text.secondary',
-          fontSize: '0.66rem',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-        }}
-      >
-        {label}
-      </Typography>
-
-      <Typography sx={{ mt: 0.3, fontSize: '0.76rem', lineHeight: 1.4 }}>
-        {value}
-      </Typography>
-    </Box>
-  );
-}
-
-export default UserManagementPage;

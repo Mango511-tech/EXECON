@@ -743,20 +743,21 @@ function PlanningPage() {
                 <ChevronLeft fontSize="small" />
               </IconButton>
 
-              <Typography
-                sx={{
-                  minWidth: 155,
-                  color: T.text,
-                  fontSize: '0.86rem',
-                  fontWeight: 800,
-                  textAlign: 'center',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  lineHeight: 1,
-                }}
-              >
-                {MONTHS[calendarDate.month()]} {calendarDate.year()}
-              </Typography>
+<Typography
+  sx={{
+    minWidth: 155,
+    color: T.text,
+    fontSize: '0.86rem',
+    fontWeight: 800,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    lineHeight: 1,
+    transform: 'translateY(9px)', // <-- Pon valores negativos para SUBIRLO (ej: -2px, -4px) o positivos para BAJARLO (ej: 2px, 4px)
+  }}
+>
+  {MONTHS[calendarDate.month()]} {calendarDate.year()}
+</Typography>
 
               <IconButton
                 size="small"

@@ -36,25 +36,6 @@ const NAV_TOKENS = {
   label: '#5B7396',
 };
 
-/* Isotipo EXECON: dos eslabones entrelazados */
-function IsotipoExecon({ size = 22 }) {
-  return (
-    <Box
-      component="svg"
-      viewBox="0 0 220 120"
-      sx={{ width: size * 1.83, height: size, display: 'block' }}
-      fill="none"
-      stroke="#FFFFFF"
-      strokeWidth="18"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M95 20 H45 L15 60 L45 100 H80 L100 75 H60" />
-      <path d="M125 100 H175 L205 60 L175 20 H140 L120 45 H160" />
-    </Box>
-  );
-}
-
 /* Encabezado de sección del menú */
 function NavLabel({ text }) {
   return (
@@ -132,7 +113,7 @@ function NavItem({ item }) {
 }
 
 function DashboardLayout({ children }) {
-  const { t, isDark } = usePreferences();
+  const { t } = usePreferences();
   const navigate = useNavigate();
 
   const userStored = JSON.parse(localStorage.getItem('execon_usuario') || '{}');
@@ -197,7 +178,6 @@ function DashboardLayout({ children }) {
         display: 'flex',
         minHeight: '100vh',
         bgcolor: 'background.default',
-        /* Zoom base 90%: mismo efecto que el navegador, sin que el usuario lo ajuste */
       }}
     >
       {/* SIDEBAR CORPORATIVO */}
@@ -217,54 +197,31 @@ function DashboardLayout({ children }) {
           zIndex: 1100,
         }}
       >
-        {/* MARCA: ISOTIPO + EXECON SMART SOLUTIONS */}
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1.25}
-          sx={{ px: 2.25, pt: 2.5, pb: 2 }}
+        {/* LOGO DE LA EMPRESA EN PNG (enlace al dashboard) */}
+        <Box
+          component={NavLink}
+          to="/dashboard"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            px: 2.5,
+            pt: 2.5,
+            pb: 2,
+            textDecoration: 'none',
+          }}
         >
           <Box
+            component="img"
+            src="Execon_Logo.png" // Cambia la ruta según el nombre de tu archivo en public/
+            alt="EXECON Smart Solutions"
             sx={{
-              width: 40,
-              height: 40,
-              borderRadius: '11px',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-              boxShadow:
-                '0 6px 16px -6px rgba(16,185,129,.55), inset 0 1px 0 rgba(255,255,255,.25)',
-              flexShrink: 0,
+              maxHeight: 42,
+              maxWidth: '100%',
+              objectFit: 'contain',
+              display: 'block',
             }}
-          >
-            <IsotipoExecon size={20} />
-          </Box>
-
-          <Box sx={{ lineHeight: 1 }}>
-            <Typography
-              sx={{
-                color: '#FFFFFF',
-                fontSize: '1rem',
-                fontWeight: 800,
-                letterSpacing: '0.24em',
-                lineHeight: 1,
-              }}
-            >
-              EXECON
-            </Typography>
-            <Typography
-              sx={{
-                color: '#7E96B4',
-                fontSize: '0.53rem',
-                fontWeight: 600,
-                letterSpacing: '0.09em',
-                mt: 0.5,
-              }}
-            >
-              SMART SOLUTIONS
-            </Typography>
-          </Box>
-        </Stack>
+          />
+        </Box>
 
         {/* NAVEGACIÓN AGRUPADA */}
         <Box

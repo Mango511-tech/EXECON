@@ -1,13 +1,17 @@
 import {
-  AccessTimeOutlined,
   AddOutlined,
-  AddTaskOutlined,
-  AssignmentOutlined,
+  AssignmentIndOutlined,
+  CheckCircleOutlineOutlined,
+  CloseOutlined,
+  DownloadOutlined,
   EditOutlined,
-  HeadsetMicOutlined,
+  HourglassEmptyOutlined,
+  InboxOutlined,
+  NavigateBefore,
+  NavigateNext,
   PersonOutlineOutlined,
   SearchOutlined,
-  SendOutlined,
+  VisibilityOutlined,
 } from '@mui/icons-material';
 
 import {
@@ -29,1059 +33,1139 @@ import {
   Paper,
   Select,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import api from '../api/client';
 import DashboardLayout from '../layouts/DashboardLayout';
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-).replace(/\/+$/, '');
+const ITEMS_POR_PAGINA = 8;
+const MONO = "'Cascadia Code', 'Consolas', monospace";
 
-const TOKENS = {
-  primary: '#003359',
-  border: '#E2E8F0',
-  divider: '#EDF2F7',
-  text: '#0F172A',
-  text2: '#475569',
-  text3: '#94A3B8',
-  cardShadow: '0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(10,37,64,.12)',
-};
-
-const EMPTY_INCIDENT_FORM = {
-  id: null,
+const INITIAL_INCIDENTE_FORM = {
   folio: '',
-  idSitio: '',
-  nombreSitio: '',
-  plaza: '',
-  municipio: '',
-  estado: '',
-  compania: '',
-  servicio: '',
   resumen: '',
   descripcion: '',
-  prioridad: '3',
-  idIsmAsignado: '',
+  ubicacion: '',
+  tecnicoId: '',
+  estatus: 'Pendiente',
 };
 
-function formatDuration(minutes) {
-  const m = Math.max(0, Math.round(Number(minutes) || 0));
-  const hours = Math.floor(m / 60);
-  const rem = m % 60;
-  return hours > 0 ? `${hours}h ${rem}m` : `${rem}m`;
-}
+/* ---------- Helpers seguros sin datos inventados ---------- */
+const safeText = (val) => (val === null || val === undefined ? '' : String(val).trim());
 
-/* Chips de estatus con punto de color (estilo boceto) */
-function getStatusStyle(status) {
-  const clean = String(status || '').trim().toUpperCase();
-  if (clean === 'PENDIENTE') return { label: 'Pendiente', background: '#FDF3E3', color: '#92400E' };
-  if (clean === 'EN ATENCION' || clean === 'ENATENCION') return { label: 'En atención', background: '#E9F9F1', color: '#067A55' };
-  if (clean === 'FINALIZADO') return { label: 'Finalizado', background: '#EAF2FA', color: '#155E9C' };
-  return { label: status || 'Pendiente', background: '#EEF2F6', color: '#475569' };
-}
+// Extrae el nombre real del usuario según las columnas posibles del backend
+const getNombreUsuario = (u) => {
+  if (!u) return '';
+  return safeText(u.nombre_completo || u.nombre || u.usuario || u.username || u.name);
+};
 
-/* ===================== COMPONENTES DE DISEÑO ===================== */
+const getInit = (val) => {
+  const t = safeText(val);
+  return t.length > 0 ? t.charAt(0).toUpperCase() : '?';
+};
 
-/* Tarjeta KPI (estilo boceto: etiqueta mayúscula, número grande, icono tintado) */
-function KpiCard({ icon, label, value, sub, color, background }) {
+const esEnAtencion = (s) => {
+  const st = safeText(s).toLowerCase();
+  return st === 'en atención' || st === 'en atencion' || st === 'asignado';
+};
+const esFinalizado = (s) => {
+  const st = safeText(s).toLowerCase();
+  return st === 'finalizado' || st === 'resuelto' || st === 'cerrado';
+};
+const esPendiente = (s) => safeText(s).toLowerCase() === 'pendiente';
+
+// Filtra que sea estrictamente ISM/MESA y no supervisor/admin/distribuidor
+const esIsmMesa = (u) => {
+  if (!u) return false;
+  const rol = safeText(u.rol || u.role || u.tipo_usuario).toUpperCase();
+  if (rol.includes('SUPERVISOR') || rol.includes('ADMIN') || rol.includes('DISTRIBUIDOR')) {
+    return false;
+  }
+  return (
+    rol.includes('ISM') ||
+    rol.includes('MESA') ||
+    rol.includes('TECNICO') ||
+    rol.includes('TÉCNICO') ||
+    rol === ''
+  );
+};
+
+/* ---------- Estilos reutilizables ---------- */
+const cardSx = {
+  borderRadius: 2.5,
+  border: '1px solid #E2E8F0',
+  bgcolor: '#FFFFFF',
+  boxShadow: '0 1px 2px rgba(15,23,42,.04), 0 4px 12px rgba(15,23,42,.04)',
+};
+
+const thSx = {
+  fontSize: '0.66rem',
+  fontWeight: 800,
+  letterSpacing: '.08em',
+  textTransform: 'uppercase',
+  color: '#94A3B8',
+  py: 1.3,
+  bgcolor: '#F8FAFC',
+};
+
+const dashedSx = {
+  border: '1.5px dashed #C7D5E4',
+  borderRadius: 2.5,
+  p: 2,
+  bgcolor: '#FBFDFE',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'space-between',
+};
+
+const dashedTitleSx = {
+  fontSize: '0.66rem',
+  fontWeight: 800,
+  letterSpacing: '.08em',
+  textTransform: 'uppercase',
+  color: '#94A3B8',
+  mb: 1.2,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 0.8,
+};
+
+const labelSx = {
+  fontSize: '0.7rem',
+  fontWeight: 800,
+  color: '#64748B',
+  textTransform: 'uppercase',
+};
+
+const iconBtnSx = {
+  border: '1px solid #E2E8F0',
+  borderRadius: 1.5,
+  color: '#64748B',
+  '&:hover': { bgcolor: '#F1F5F9' },
+};
+
+/* ---------- Tarjeta KPI con animación hover ---------- */
+function KpiCard({ label, value, sub, bg, color, Icon }) {
   return (
     <Paper
+      elevation={0}
       sx={{
-        height: 118,
-        overflow: 'hidden',
-        border: `1px solid ${TOKENS.border}`,
-        borderRadius: 2.5,
-        boxShadow: TOKENS.cardShadow,
-        p: 1.75,
-        display: 'flex',
-        flexDirection: 'column',
+        ...cardSx,
+        p: 2.2,
+        transition: 'transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease',
+        cursor: 'default',
+        '&:hover': {
+          transform: 'translateY(-4px) scale(1.01)',
+          boxShadow: '0 12px 24px -8px rgba(10,37,64,0.12), 0 4px 12px rgba(15,23,42,0.06)',
+          borderColor: '#CBD5E1',
+        },
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          mb: 'auto',
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
         <Typography
-          sx={{
-            color: TOKENS.text3,
-            fontSize: '0.66rem',
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            lineHeight: 1.3,
-          }}
+          sx={{ fontSize: '0.66rem', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94A3B8' }}
         >
           {label}
         </Typography>
-
         <Box
           sx={{
             width: 36,
             height: 36,
-            display: 'grid',
-            placeItems: 'center',
-            borderRadius: 1.75,
-            bgcolor: background,
+            borderRadius: 2,
+            bgcolor: bg,
             color,
-            flexShrink: 0,
-            '& svg': { fontSize: 19 },
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          {icon}
+          <Icon sx={{ fontSize: 20 }} />
         </Box>
       </Box>
-
-      <Typography
-        sx={{
-          color,
-          fontSize: '1.7rem',
-          fontWeight: 800,
-          lineHeight: 1,
-          letterSpacing: '-0.02em',
-        }}
-      >
+      <Typography sx={{ fontSize: '1.85rem', fontWeight: 800, color: '#0F172A', lineHeight: 1 }}>
         {value}
       </Typography>
-
-      <Typography sx={{ mt: 0.5, color: TOKENS.text3, fontSize: '0.64rem', fontWeight: 500 }}>
-        {sub}
-      </Typography>
+      <Typography sx={{ fontSize: '0.74rem', color: '#94A3B8', mt: 0.8 }}>{sub}</Typography>
     </Paper>
   );
 }
 
-/* Encabezado de página con acción principal */
-function PageHeader({ title, subtitle, action }) {
+function Paso({ n, texto, hecho, activo }) {
   return (
-    <Stack
-      direction={{ xs: 'column', sm: 'row' }}
-      alignItems={{ xs: 'flex-start', sm: 'center' }}
-      justifyContent="space-between"
-      spacing={1.5}
-      sx={{ mb: 2.5 }}
-    >
-      <Box>
-        <Typography sx={{ color: TOKENS.text, fontSize: '1.3rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
-          {title}
-        </Typography>
-        <Typography sx={{ color: TOKENS.text3, fontSize: '0.78rem', mt: 0.4 }}>
-          {subtitle}
-        </Typography>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+      <Box
+        sx={{
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          bgcolor: hecho ? '#E9F9F1' : activo ? '#003359' : '#E2E8F0',
+          color: hecho ? '#168A4A' : activo ? '#FFFFFF' : '#64748B',
+          fontSize: '0.72rem',
+          fontWeight: 800,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {n}
       </Box>
-      {action}
-    </Stack>
-  );
-}
-
-/* Encabezado de tarjeta de sección */
-function CardHead({ title, hint, children }) {
-  return (
-    <Box
-      sx={{
-        px: 2.25,
-        pt: 2,
-        pb: 1.75,
-        borderBottom: `1px solid ${TOKENS.divider}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-        flexWrap: 'wrap',
-      }}
-    >
-      <Box>
-        <Typography sx={{ color: TOKENS.text, fontSize: '0.9rem', fontWeight: 700 }}>
-          {title}
-        </Typography>
-        {hint && (
-          <Typography sx={{ color: TOKENS.text3, fontSize: '0.72rem', mt: 0.3 }}>
-            {hint}
-          </Typography>
-        )}
-      </Box>
-      {children && (
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.2}
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          sx={{ ml: 'auto', width: { xs: '100%', sm: 'auto' } }}
-        >
-          {children}
-        </Stack>
-      )}
+      <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>{texto}</Typography>
     </Box>
   );
 }
 
-/* Indicador de pasos de la asignación */
-function AssignStepper({ hasAgent, hasFolio }) {
-  const steps = [
-    { n: 1, label: 'Seleccionar agente', done: hasAgent },
-    { n: 2, label: 'Ingresar folio', done: hasFolio },
-    { n: 3, label: 'Confirmar', done: hasAgent && hasFolio },
-  ];
+export default function OnsiteDistributionPage() {
+  const [incidentes, setIncidentes] = useState([]);
+  const [tecnicos, setTecnicos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstatus, setFiltroEstatus] = useState('Todos');
+  const [pagina, setPagina] = useState(1);
 
-  return (
-    <Stack direction="row" alignItems="center" spacing={1.2}>
-      {steps.map((step, index) => (
-        <Stack key={step.n} direction="row" alignItems="center" spacing={1.2}>
-          <Stack direction="row" alignItems="center" spacing={0.7}>
-            <Box
-              sx={{
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: '0.62rem',
-                fontWeight: 700,
-                bgcolor: step.done ? '#E9F9F1' : TOKENS.primary,
-                color: step.done ? '#067A55' : '#FFFFFF',
-                transition: 'all 200ms ease',
-              }}
-            >
-              {step.n}
-            </Box>
-            <Typography
-              sx={{
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                color: step.done ? '#067A55' : TOKENS.text3,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {step.label}
-            </Typography>
-          </Stack>
-          {index < steps.length - 1 && (
-            <Box sx={{ width: 16, height: 1.5, bgcolor: '#CBD5E1', borderRadius: 2 }} />
-          )}
-        </Stack>
-      ))}
-    </Stack>
-  );
-}
+  // Asignación rápida
+  const [agenteAsignar, setAgenteAsignar] = useState('');
+  const [folioAsignar, setFolioAsignar] = useState('');
+  const [asignando, setAsignando] = useState(false);
 
-/* Etiqueta pequeña de campo dentro de las tarjetas punteadas */
-function FieldLabel({ text }) {
-  return (
-    <Typography
-      sx={{
-        mb: 1,
-        fontSize: '0.64rem',
-        fontWeight: 700,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        color: TOKENS.text3,
-      }}
-    >
-      {text}
-    </Typography>
-  );
-}
+  // Modales
+  const [modalDetalle, setModalDetalle] = useState(null);
+  const [modalFormulario, setModalFormulario] = useState(false);
+  const [formulario, setFormulario] = useState(INITIAL_INCIDENTE_FORM);
+  const [editandoId, setEditandoId] = useState(null);
+  const [guardandoForm, setGuardandoForm] = useState(false);
 
-function OnsiteDistributionPage() {
-  const [engineers, setEngineers] = useState([]);
-  const [incidents, setIncidents] = useState([]);
-  const [loadingEngineers, setLoadingEngineers] = useState(true);
-  const [loadingIncidents, setLoadingIncidents] = useState(true);
+  const [mensaje, setMensaje] = useState(null);
 
-  const [selectedEngineer, setSelectedEngineer] = useState('');
-  const [incidentSearch, setIncidentSearch] = useState('');
-  const [tableSearch, setTableSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('TODOS');
-  const [message, setMessage] = useState(null);
-
-  // Modal Crear / Editar Incidente
-  const [openModal, setOpenModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [incidentForm, setIncidentForm] = useState(EMPTY_INCIDENT_FORM);
-  const [savingIncident, setSavingIncident] = useState(false);
-
-  const loadEngineers = useCallback(async () => {
-    setLoadingEngineers(true);
+  // Carga de datos
+  const cargarDatos = async () => {
+    setCargando(true);
     try {
-      const token = localStorage.getItem('execon_token');
-      const response = await fetch(`${API_URL}/ingenieros`, {
-        headers: {
-          Accept: 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || 'No fue posible cargar los agentes.');
-      setEngineers(Array.isArray(result.data) ? result.data : []);
-    } catch (error) {
-      setEngineers([]);
-      setMessage({ severity: 'error', text: error.message || 'Error al cargar agentes.' });
-    } finally {
-      setLoadingEngineers(false);
-    }
-  }, []);
+      const [resIncidentes, resTecnicos] = await Promise.allSettled([
+        api.get('/onsite'),
+        api.get('/usuarios?rol=ISM/MESA'),
+      ]);
 
-  const loadIncidents = useCallback(async () => {
-    setLoadingIncidents(true);
-    try {
-      const token = localStorage.getItem('execon_token');
-      const response = await fetch(`${API_URL}/incidentes`, {
-        headers: {
-          Accept: 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const result = await response.json().catch(() => ({}));
-      if (response.ok && Array.isArray(result.data)) {
-        setIncidents(result.data);
+      if (resIncidentes.status === 'fulfilled') {
+        const datos = resIncidentes.value.data?.data || resIncidentes.value.data || [];
+        setIncidentes(Array.isArray(datos) ? datos : []);
       } else {
-        setIncidents([]);
+        setIncidentes([]);
+      }
+
+      if (resTecnicos.status === 'fulfilled') {
+        const datos = resTecnicos.value.data?.data || resTecnicos.value.data || [];
+        setTecnicos(Array.isArray(datos) ? datos : []);
+      } else {
+        setTecnicos([]);
       }
     } catch {
-      setIncidents([]);
+      setIncidentes([]);
+      setTecnicos([]);
     } finally {
-      setLoadingIncidents(false);
+      setCargando(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    loadEngineers();
-    loadIncidents();
-  }, [loadEngineers, loadIncidents]);
+    cargarDatos();
+  }, []);
 
-  const availableEngineers = useMemo(() => {
-    return engineers.filter((e) => String(e.estatus || '').toLowerCase() === 'mesa' || !e.estatus);
-  }, [engineers]);
-
-  const filteredIncidents = useMemo(() => {
-    const normalized = tableSearch.trim().toLowerCase();
-    return incidents.filter((item) => {
-      const matchSearch =
-        !normalized ||
-        item.folio?.toLowerCase().includes(normalized) ||
-        item.incidente?.toLowerCase().includes(normalized) ||
-        item.resumen?.toLowerCase().includes(normalized) ||
-        item.ismMesa?.toLowerCase().includes(normalized) ||
-        item.ubicacion?.toLowerCase().includes(normalized);
-
-      const matchStatus = statusFilter === 'TODOS' || item.estatus === statusFilter;
-      return matchSearch && matchStatus;
+  // Lista depurada: solo usuarios reales con nombre, rol ISM/MESA y en estatus mesa
+  const tecnicosIsmDisponibles = useMemo(() => {
+    if (!Array.isArray(tecnicos)) return [];
+    return tecnicos.filter((t) => {
+      if (!t || t.activo === false) return false;
+      // Solo usuarios que tengan nombre real registrado
+      const nombre = getNombreUsuario(t);
+      if (!nombre) return false;
+      if (!esIsmMesa(t)) return false;
+      return t.en_mesa === true || t.estatus === 'En mesa' || !t.onsite_actual;
     });
-  }, [incidents, tableSearch, statusFilter]);
+  }, [tecnicos]);
 
-  const summary = useMemo(() => {
-    const disponibles = availableEngineers.length;
-    const pendientes = incidents.filter((i) => i.estatus === 'PENDIENTE').length;
-    const enAtencion = incidents.filter((i) => i.estatus === 'EN ATENCION' || i.estatus === 'ENATENCION').length;
-    const finalizados = incidents.filter((i) => i.estatus === 'FINALIZADO').length;
-    const totalDurationMinutes = incidents.reduce((acc, curr) => acc + (curr.duracionMinutos || 0), 0);
-    const averageMinutes = incidents.length > 0 ? Math.round(totalDurationMinutes / incidents.length) : 0;
+  // Métricas reales
+  const kpis = useMemo(() => {
+    const list = Array.isArray(incidentes) ? incidentes : [];
+    const total = list.length;
+    const pendientes = list.filter((i) => esPendiente(i?.estatus)).length;
+    const enAtencion = list.filter((i) => esEnAtencion(i?.estatus)).length;
+    const finalizados = list.filter((i) => esFinalizado(i?.estatus)).length;
+    const disponibles = tecnicosIsmDisponibles.length;
 
-    return { disponibles, pendientes, enAtencion, finalizados, averageMinutes };
-  }, [availableEngineers, incidents]);
+    return { total, pendientes, enAtencion, finalizados, disponibles };
+  }, [incidentes, tecnicosIsmDisponibles]);
 
-  // ASIGNAR ONSITE DIRECTAMENTE DESDE EL PANEL SUPERIOR
-  const handleAssignOnsiteDirect = async () => {
-    if (!selectedEngineer) {
-      setMessage({ severity: 'warning', text: 'Selecciona un agente ISM/MESA disponible.' });
-      return;
-    }
-    if (!incidentSearch.trim()) {
-      setMessage({ severity: 'warning', text: 'Escribe el folio del incidente a asignar.' });
-      return;
-    }
-
-    const targetIncident = incidents.find(
-      (i) => String(i.folio).trim().toLowerCase() === incidentSearch.trim().toLowerCase()
-    );
-
-    if (targetIncident) {
-      try {
-        const token = localStorage.getItem('execon_token');
-        const response = await fetch(`${API_URL}/incidentes/${targetIncident.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            idIsmAsignado: selectedEngineer,
-            estatus: 'EN ATENCION',
-          }),
-        });
-
-        if (!response.ok) throw new Error('No se pudo asignar el incidente.');
-        setMessage({ severity: 'success', text: `Incidente #${targetIncident.folio} asignado exitosamente (Estatus: En atención).` });
-        setSelectedEngineer('');
-        setIncidentSearch('');
-        loadIncidents();
-        loadEngineers();
-      } catch (err) {
-        setMessage({ severity: 'error', text: err.message || 'Error al asignar incidente.' });
-      }
-    } else {
-      setIncidentForm({
-        ...EMPTY_INCIDENT_FORM,
-        folio: incidentSearch.trim(),
-        idIsmAsignado: selectedEngineer,
-      });
-      setIsEditing(false);
-      setOpenModal(true);
-    }
-  };
-
-  // CREAR O EDITAR INCIDENTE MEDIANTE MODAL
-  const handleSaveIncident = async (e) => {
+  // Asignación rápida
+  const handleAsignacionRapida = async (e) => {
     e.preventDefault();
-    if (!incidentForm.folio.trim() || !incidentForm.resumen.trim()) {
-      setMessage({ severity: 'error', text: 'Folio y resumen son obligatorios.' });
+    if (!agenteAsignar || !folioAsignar.trim()) {
+      setMensaje({
+        tipo: 'warning',
+        texto: 'Selecciona un técnico disponible e ingresa el folio del incidente.',
+      });
       return;
     }
 
-    setSavingIncident(true);
+    setAsignando(true);
     try {
-      const userStored = JSON.parse(localStorage.getItem('execon_usuario') || '{}');
-      const token = localStorage.getItem('execon_token');
-
-      const url = isEditing ? `${API_URL}/incidentes/${incidentForm.id}` : `${API_URL}/incidentes`;
-      const method = isEditing ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          ...incidentForm,
-          asignadoPor: userStored.id || null,
-          estatus: incidentForm.idIsmAsignado ? 'EN ATENCION' : 'PENDIENTE',
-        }),
+      await api.post('/onsite/asignar', {
+        tecnicoId: agenteAsignar,
+        folio: folioAsignar.trim(),
       });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || 'No fue posible guardar el incidente.');
-
-      setMessage({
-        severity: 'success',
-        text: isEditing
-          ? `Incidente #${incidentForm.folio} actualizado correctamente.`
-          : `Incidente #${incidentForm.folio} registrado correctamente.`,
+      setMensaje({
+        tipo: 'success',
+        texto: `Incidente ${folioAsignar.trim()} asignado exitosamente.`,
       });
-
-      setOpenModal(false);
-      setIncidentForm(EMPTY_INCIDENT_FORM);
-      setIsEditing(false);
-      loadIncidents();
-      loadEngineers();
+      setAgenteAsignar('');
+      setFolioAsignar('');
+      cargarDatos();
     } catch (err) {
-      setMessage({ severity: 'error', text: err.message || 'Error al guardar incidente.' });
+      setMensaje({
+        tipo: 'error',
+        texto: err.response?.data?.message || 'No fue posible completar la asignación rápida.',
+      });
     } finally {
-      setSavingIncident(false);
+      setAsignando(false);
     }
   };
 
-  const handleOpenEdit = (incident) => {
-    setIncidentForm({
-      id: incident.id,
-      folio: incident.folio || '',
-      idSitio: incident.idSitio || '',
-      nombreSitio: incident.ubicacion || incident.nombreSitio || '',
-      plaza: incident.plaza || '',
-      municipio: incident.municipio || '',
-      estado: incident.estado || '',
-      compania: incident.compania || '',
-      servicio: incident.servicio || '',
-      resumen: incident.incidente || incident.resumen || '',
-      descripcion: incident.descripcion || '',
-      prioridad: incident.prioridad ? String(incident.prioridad).replace(/^P/i, '') : '3',
-      idIsmAsignado: incident.idIsmMesa || incident.id_ism_asignado || '',
-    });
-    setIsEditing(true);
-    setOpenModal(true);
+  // Crear o editar
+  const handleGuardarIncidente = async (e) => {
+    e.preventDefault();
+    if (!formulario.folio.trim() || !formulario.resumen.trim()) {
+      setMensaje({
+        tipo: 'warning',
+        texto: 'El folio y el resumen del incidente son obligatorios.',
+      });
+      return;
+    }
+
+    setGuardandoForm(true);
+    try {
+      if (editandoId) {
+        await api.put(`/onsite/${editandoId}`, formulario);
+        setMensaje({ tipo: 'success', texto: 'Incidente actualizado correctamente.' });
+      } else {
+        await api.post('/onsite', formulario);
+        setMensaje({ tipo: 'success', texto: 'Incidente registrado correctamente.' });
+      }
+      setModalFormulario(false);
+      setEditandoId(null);
+      setFormulario(INITIAL_INCIDENTE_FORM);
+      cargarDatos();
+    } catch (err) {
+      setMensaje({
+        tipo: 'error',
+        texto: err.response?.data?.message || 'Ocurrió un error al guardar el incidente.',
+      });
+    } finally {
+      setGuardandoForm(false);
+    }
   };
 
-  const selectedEngineerName = useMemo(() => {
-    const eng = availableEngineers.find((e) => String(e.id) === String(selectedEngineer));
-    return eng?.nombre || null;
-  }, [availableEngineers, selectedEngineer]);
+  const abrirCreacion = () => {
+    setEditandoId(null);
+    setFormulario(INITIAL_INCIDENTE_FORM);
+    setModalFormulario(true);
+  };
+
+  const abrirEdicion = (item) => {
+    if (!item) return;
+    setEditandoId(item.id);
+    setFormulario({
+      folio: item.folio || '',
+      resumen: item.resumen || item.titulo || '',
+      descripcion: item.descripcion || '',
+      ubicacion: item.ubicacion || '',
+      tecnicoId: item.tecnico_id || item.tecnicoId || '',
+      estatus: item.estatus || 'Pendiente',
+    });
+    setModalFormulario(true);
+  };
+
+  // Exportar a CSV
+  const exportarCSV = () => {
+    if (!incidentes.length) return;
+    const encabezados = ['Fecha', 'Folio', 'Resumen', 'Ubicacion', 'Tecnico', 'Estatus'];
+    const filas = incidentes.map((i) => [
+      `"${i?.fecha || i?.creado_en || ''}"`,
+      `"${i?.folio || ''}"`,
+      `"${safeText(i?.resumen || i?.titulo).replace(/"/g, '""')}"`,
+      `"${i?.ubicacion || ''}"`,
+      `"${i?.tecnico_nombre || i?.tecnico || 'Sin asignar'}"`,
+      `"${i?.estatus || ''}"`,
+    ]);
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [encabezados.join(','), ...filas.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `onsite_distribucion_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Filtrado
+  const incidentesFiltrados = useMemo(() => {
+    const list = Array.isArray(incidentes) ? incidentes : [];
+    return list.filter((item) => {
+      if (!item) return false;
+      const b = busqueda.toLowerCase();
+      const matchBusqueda =
+        safeText(item.folio).toLowerCase().includes(b) ||
+        safeText(item.resumen || item.titulo).toLowerCase().includes(b) ||
+        safeText(item.ubicacion).toLowerCase().includes(b);
+
+      if (!matchBusqueda) return false;
+
+      if (filtroEstatus === 'Pendientes') return esPendiente(item.estatus);
+      if (filtroEstatus === 'En atención') return esEnAtencion(item.estatus);
+      if (filtroEstatus === 'Finalizados') return esFinalizado(item.estatus);
+      return true;
+    });
+  }, [incidentes, busqueda, filtroEstatus]);
+
+  // Paginación
+  const totalPaginas = Math.ceil(incidentesFiltrados.length / ITEMS_POR_PAGINA) || 1;
+  const incidentesPaginados = useMemo(() => {
+    const inicio = (pagina - 1) * ITEMS_POR_PAGINA;
+    return incidentesFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
+  }, [incidentesFiltrados, pagina]);
+
+  const mostrados = Math.min(pagina * ITEMS_POR_PAGINA, incidentesFiltrados.length);
+
+  // Chip de estatus
+  const renderStatusChip = (estatus) => {
+    let label = 'Pendiente';
+    let bg = '#FDF3E3';
+    let color = '#B45309';
+    if (esFinalizado(estatus)) {
+      label = 'Finalizado';
+      bg = '#E9F9F1';
+      color = '#168A4A';
+    } else if (esEnAtencion(estatus)) {
+      label = 'En atención';
+      bg = '#EAF2FA';
+      color = '#155E9C';
+    }
+    return (
+      <Chip
+        label={label}
+        size="small"
+        sx={{ bgcolor: bg, color, fontWeight: 700, fontSize: '0.72rem', borderRadius: 5, height: 22 }}
+      />
+    );
+  };
+
+  const nombreTecnico = (item) => safeText(item?.tecnico_nombre || item?.tecnico);
 
   return (
     <DashboardLayout>
-      <Box sx={{ pb: 3 }}>
-        {/* ENCABEZADO DE PÁGINA */}
-        <PageHeader
-          title="Distribución de Onsite"
-          subtitle="Registro, asignación y seguimiento de servicios en campo"
-          action={
-            <Button
-              variant="outlined"
-              startIcon={<AddOutlined />}
-              onClick={() => {
-                setIncidentForm(EMPTY_INCIDENT_FORM);
-                setIsEditing(false);
-                setOpenModal(true);
-              }}
-              sx={{
-                borderColor: TOKENS.primary,
-                color: TOKENS.primary,
-                fontWeight: 700,
-                textTransform: 'none',
-                minHeight: 40,
-                px: 2,
-                borderRadius: 1.5,
-                '&:hover': {
-                  bgcolor: '#EAF2FA',
-                  borderColor: '#00223D',
-                },
-              }}
-            >
-              Crear incidente
-            </Button>
-          }
-        />
-
-        {/* TARJETAS KPI */}
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              xl: 'repeat(4, minmax(0, 1fr))',
-            },
-            gap: 1.5,
-            mb: 2.5,
-          }}
-        >
-          <KpiCard
-            icon={<PersonOutlineOutlined />}
-            label="Disponibles en mesa"
-            value={summary.disponibles}
-            sub="Listos para recibir asignación"
-            color="#155E9C"
-            background="#EAF2FA"
-          />
-          <KpiCard
-            icon={<AddTaskOutlined />}
-            label="Onsites pendientes"
-            value={summary.pendientes}
-            sub="Sin técnico asignado"
-            color="#92400E"
-            background="#FDF3E3"
-          />
-          <KpiCard
-            icon={<HeadsetMicOutlined />}
-            label="En atención"
-            value={summary.enAtencion}
-            sub="Servicios activos ahora"
-            color="#067A55"
-            background="#E9F9F1"
-          />
-          <KpiCard
-            icon={<AccessTimeOutlined />}
-            label="Tiempo promedio"
-            value={formatDuration(summary.averageMinutes)}
-            sub="Duración de atención"
-            color="#5546A5"
-            background="#EFEDFA"
-          />
-        </Box>
-
-        {/* ASIGNACIÓN RÁPIDA DE ONSITE */}
-        <Paper
-          sx={{
-            border: `1px solid ${TOKENS.border}`,
-            borderRadius: 2.5,
-            overflow: 'hidden',
-            boxShadow: TOKENS.cardShadow,
-            mb: 2.5,
-          }}
-        >
-          <CardHead
-            title="Asignación rápida de Onsite"
-            hint="Vincula un incidente con un técnico disponible en tres pasos"
-          >
-            <AssignStepper
-              hasAgent={Boolean(selectedEngineer)}
-              hasFolio={Boolean(incidentSearch.trim())}
-            />
-          </CardHead>
-
-          <Box
-            sx={{
-              p: 2.25,
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                lg: 'minmax(260px, 1fr) minmax(300px, 1.25fr) auto',
-              },
-              gap: 1.75,
-              alignItems: 'stretch',
-            }}
-          >
-            {/* Paso 1: Agente disponible */}
-            <Box
-              sx={{
-                border: '1.5px dashed #C7D5E4',
-                borderRadius: 2,
-                p: 1.75,
-                bgcolor: '#FBFDFE',
-              }}
-            >
-              <FieldLabel text="ISM / MESA disponible" />
-              <FormControl fullWidth size="small">
-                <InputLabel id="engineer-select-label">Selecciona un agente</InputLabel>
-                <Select
-                  labelId="engineer-select-label"
-                  value={selectedEngineer}
-                  label="Selecciona un agente"
-                  onChange={(e) => setSelectedEngineer(e.target.value)}
-                  disabled={loadingEngineers}
-                  sx={{
-                    bgcolor: '#F8FAFC',
-                    borderRadius: 1.5,
-                    fontSize: '0.85rem',
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: TOKENS.border },
-                  }}
-                >
-                  <MenuItem value="">Sin seleccionar</MenuItem>
-                  {availableEngineers.map((eng) => (
-                    <MenuItem key={eng.id} value={eng.id}>
-                      {eng.nombre}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Typography sx={{ mt: 1, fontSize: '0.68rem', color: TOKENS.text3 }}>
-                Solo se muestran agentes en estatus “En mesa”.
-              </Typography>
-            </Box>
-
-            {/* Paso 2: Folio del incidente */}
-            <Box
-              sx={{
-                border: '1.5px dashed #C7D5E4',
-                borderRadius: 2,
-                p: 1.75,
-                bgcolor: '#FBFDFE',
-              }}
-            >
-              <FieldLabel text="Incidente por folio" />
-              <TextField
-                value={incidentSearch}
-                onChange={(e) => setIncidentSearch(e.target.value)}
-                placeholder="Ej. 2038164"
-                size="small"
-                fullWidth
-                slotProps={{
-                  input: {
-                    sx: {
-                      fontFamily: '"Cascadia Code", "Consolas", monospace',
-                      letterSpacing: '0.03em',
-                      fontSize: '0.9rem',
-                    },
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <SearchOutlined sx={{ color: TOKENS.text3, fontSize: 20 }} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    bgcolor: '#F8FAFC',
-                    borderRadius: 1.5,
-                  },
-                }}
-              />
-              <Typography sx={{ mt: 1, fontSize: '0.68rem', color: TOKENS.text3 }}>
-                Si el folio no existe, se abrirá el formulario para registrarlo.
-              </Typography>
-            </Box>
-
-            {/* Paso 3: Confirmar */}
-            <Button
-              variant="contained"
-              startIcon={<SendOutlined />}
-              onClick={handleAssignOnsiteDirect}
-              disabled={loadingEngineers}
-              sx={{
-                minHeight: 48,
-                px: 3,
-                alignSelf: 'center',
-                bgcolor: TOKENS.primary,
-                textTransform: 'none',
-                fontSize: '0.88rem',
-                fontWeight: 700,
-                borderRadius: 1.5,
-                boxShadow: '0 6px 14px -6px rgba(0,51,89,.5)',
-                '&:hover': { bgcolor: '#00223D' },
-                '&.Mui-disabled': { bgcolor: '#94A3B8' },
-              }}
-            >
-              Asignar onsite
-            </Button>
-          </Box>
-        </Paper>
-
-        {message && (
-          <Alert
-            severity={message.severity}
-            onClose={() => setMessage(null)}
-            sx={{ mb: 2, borderRadius: 2, fontSize: '0.85rem' }}
-          >
-            {message.text}
+      <Box sx={{ pb: 4, pt: 0.5 }}>
+        {mensaje && (
+          <Alert severity={mensaje.tipo} onClose={() => setMensaje(null)} sx={{ mb: 2.5, borderRadius: 2 }}>
+            {mensaje.texto}
           </Alert>
         )}
 
-        {/* TABLA CONCENTRADORA */}
-        <Paper
+        {/* 1. KPIs con animación hover */}
+        <Box
           sx={{
-            border: `1px solid ${TOKENS.border}`,
-            borderRadius: 2.5,
-            overflow: 'hidden',
-            boxShadow: TOKENS.cardShadow,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+            gap: 2,
+            mb: 2.5,
           }}
         >
-          <CardHead
-            title="Tabla concentradora de Onsite"
-            hint={`${filteredIncidents.length} de ${incidents.length} servicios registrados`}
-          >
-            <TextField
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              placeholder="Buscar por folio, incidente o ubicación…"
-              size="small"
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchOutlined sx={{ fontSize: 17, color: TOKENS.text3 }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{
-                minWidth: { xs: '100%', sm: 280 },
-                '& .MuiOutlinedInput-root': {
-                  height: 36,
-                  fontSize: '0.8rem',
-                  bgcolor: '#F8FAFC',
-                  borderRadius: 1.25,
-                },
-              }}
-            />
-            <Select
-              size="small"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              sx={{
-                height: 36,
-                minWidth: 165,
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                color: TOKENS.text2,
-                bgcolor: '#F8FAFC',
-                borderRadius: 1.25,
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: TOKENS.border },
-              }}
-            >
-              <MenuItem value="TODOS">Todos los estatus</MenuItem>
-              <MenuItem value="PENDIENTE">Pendientes</MenuItem>
-              <MenuItem value="EN ATENCION">En atención</MenuItem>
-              <MenuItem value="FINALIZADO">Finalizados</MenuItem>
-            </Select>
-          </CardHead>
+          <KpiCard
+            label="Disponibles en mesa"
+            value={kpis.disponibles}
+            sub="Listos para recibir asignación"
+            bg="#EAF2FA"
+            color="#155E9C"
+            Icon={PersonOutlineOutlined}
+          />
+          <KpiCard
+            label="Onsites pendientes"
+            value={kpis.pendientes}
+            sub="Sin técnico asignado"
+            bg="#FDF3E3"
+            color="#B45309"
+            Icon={HourglassEmptyOutlined}
+          />
+          <KpiCard
+            label="En atención"
+            value={kpis.enAtencion}
+            sub="Servicios activos ahora"
+            bg="#E9F9F1"
+            color="#168A4A"
+            Icon={CheckCircleOutlineOutlined}
+          />
+          <KpiCard
+            label="Total registrados"
+            value={kpis.total}
+            sub="Histórico acumulado"
+            bg="#EFEDFA"
+            color="#6A45B5"
+            Icon={AssignmentIndOutlined}
+          />
+        </Box>
 
-          <Box sx={{ overflowX: 'auto' }}>
+        {/* 2. Asignación rápida: con botón "Crear incidente" adentro */}
+        <Paper elevation={0} sx={{ ...cardSx, mb: 2.5, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              justifyContent: 'space-between',
+              alignItems: { xs: 'flex-start', md: 'center' },
+              gap: 1.5,
+              borderBottom: '1px solid #E2E8F0',
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: '0.9rem', fontWeight: 700, color: '#0F172A' }}>
+                Asignación rápida de Onsite
+              </Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                Vincula un incidente con un técnico disponible en tres pasos
+              </Typography>
+            </Box>
+
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Paso n={1} texto="Seleccionar agente" hecho={!!agenteAsignar} activo={!agenteAsignar} />
+              <Typography sx={{ color: '#CBD5E1', fontSize: '0.8rem' }}>→</Typography>
+              <Paso n={2} texto="Ingresar folio" hecho={!!folioAsignar.trim()} activo={!!agenteAsignar && !folioAsignar.trim()} />
+              <Typography sx={{ color: '#CBD5E1', fontSize: '0.8rem' }}>→</Typography>
+              <Paso n={3} texto="Confirmar" activo={!!agenteAsignar && !!folioAsignar.trim()} />
+            </Stack>
+          </Box>
+
+          <Box
+            component="form"
+            onSubmit={handleAsignacionRapida}
+            sx={{
+              p: 3,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '1fr 1.25fr auto' },
+              gap: 2,
+              alignItems: 'stretch',
+            }}
+          >
+            {/* Paso 1: Selector ISM */}
+            <Box sx={dashedSx}>
+              <Typography sx={dashedTitleSx}>
+                <PersonOutlineOutlined sx={{ fontSize: 16 }} />
+                ISM / MESA disponible
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select
+                  displayEmpty
+                  value={agenteAsignar}
+                  onChange={(e) => setAgenteAsignar(e.target.value)}
+                  renderValue={(v) => {
+                    const t = tecnicosIsmDisponibles.find((x) => x?.id === v);
+                    const nombre = getNombreUsuario(t);
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, py: 0.3 }}>
+                        <Avatar
+                          sx={{
+                            width: 30,
+                            height: 30,
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            background: t
+                              ? 'linear-gradient(135deg,#0E9F6E,#067A55)'
+                              : 'linear-gradient(135deg,#94A3B8,#64748B)',
+                          }}
+                        >
+                          {getInit(nombre)}
+                        </Avatar>
+                        <Box>
+                          <Typography sx={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
+                            {nombre || 'Selecciona un agente'}
+                          </Typography>
+                          
+                        </Box>
+                      </Box>
+                    );
+                  }}
+                  sx={{
+                    bgcolor: '#FFFFFF',
+                    borderRadius: 2.5,
+                    '& fieldset': { borderColor: '#E2E8F0' },
+                  }}
+                >
+                  {tecnicosIsmDisponibles.length === 0 ? (
+                    <MenuItem disabled value="">
+                      <Typography sx={{ fontSize: '0.8rem', color: '#94A3B8' }}>
+                        No hay técnicos ISM en mesa disponibles
+                      </Typography>
+                    </MenuItem>
+                  ) : (
+                    tecnicosIsmDisponibles.map((t) => {
+                      const nom = getNombreUsuario(t);
+                      return (
+                        <MenuItem key={t.id} value={t.id} sx={{ py: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+                            <Avatar
+                              sx={{
+                                width: 26,
+                                height: 26,
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                background: 'linear-gradient(135deg,#0E9F6E,#067A55)',
+                              }}
+                            >
+                              {getInit(nom)}
+                            </Avatar>
+                            <Box>
+                              <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, color: '#0F172A' }}>
+                                {nom}
+                              </Typography>
+                              <Typography sx={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                                En mesa · Disponible
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </MenuItem>
+                      );
+                    })
+                  )}
+                </Select>
+              </FormControl>
+            </Box>
+
+            {/* Paso 2: Folio */}
+            <Box sx={dashedSx}>
+              <Typography sx={dashedTitleSx}>
+                <SearchOutlined sx={{ fontSize: 16 }} />
+                Incidente por folio
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="iNSERTAR INCIDENTE"
+                value={folioAsignar}
+                onChange={(e) => setFolioAsignar(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchOutlined sx={{ fontSize: 18, color: '#94A3B8' }} />
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      bgcolor: '#FFFFFF',
+                      fontFamily: MONO,
+                      fontSize: '0.88rem',
+                      borderRadius: 2.5,
+                      '& fieldset': { borderColor: '#E2E8F0' },
+                    },
+                  },
+                }}
+              />
+            </Box>
+
+            {/* Columna de Acciones: Asignar + Crear incidente juntos */}
             <Box
-              component="table"
               sx={{
-                width: '100%',
-                minWidth: 900,
-                borderCollapse: 'collapse',
-                '& th': {
-                  py: 1.25,
-                  px: 1.75,
-                  color: TOKENS.text3,
-                  fontSize: '0.66rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textAlign: 'left',
-                  textTransform: 'uppercase',
-                  bgcolor: '#F8FAFC',
-                  borderBottom: `1px solid ${TOKENS.border}`,
-                },
-                '& td': {
-                  py: 1.35,
-                  px: 1.75,
-                  color: TOKENS.text2,
-                  fontSize: '0.82rem',
-                  borderBottom: `1px solid ${TOKENS.divider}`,
-                },
-                '& tbody tr:hover td': { bgcolor: '#F8FAFC' },
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: 1.25,
+                minWidth: { lg: 200 },
               }}
             >
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Folio</th>
-                  <th>Incidente / Resumen</th>
-                  <th>Ubicación</th>
-                  <th>ISM/MESA asignado</th>
-                  <th>Estatus</th>
-                  <th style={{ textAlign: 'center' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingIncidents ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px' }}>
-                      <CircularProgress size={26} />
-                    </td>
-                  </tr>
-                ) : filteredIncidents.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px' }}>
-                      <AssignmentOutlined sx={{ color: '#CBD5E1', fontSize: 34 }} />
-                      <Typography sx={{ color: TOKENS.text2, fontWeight: 700, mt: 1, fontSize: '0.88rem' }}>
-                        No hay incidencias Onsite registradas
+              <Button
+                type="button"
+                variant="outlined"
+                startIcon={<AddOutlined />}
+                onClick={abrirCreacion}
+                sx={{
+                  bgcolor: '#FFFFFF',
+                  color: '#003359',
+                  borderColor: '#003359',
+                  borderWidth: 1.5,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  borderRadius: 2.5,
+                  px: 2.5,
+                  py: 1,
+                  height: 42,
+                  '&:hover': { borderWidth: 1.5, borderColor: '#003359', bgcolor: '#F8FAFC' },
+                }}
+              >
+                Crear incidente
+              </Button>
+
+              <Button
+                type="submit"
+                variant="contained"
+                disableElevation
+                disabled={asignando || !agenteAsignar || !folioAsignar.trim()}
+                startIcon={!asignando && <NavigateNext />}
+                sx={{
+                  bgcolor: '#003359',
+                  textTransform: 'none',
+                  fontWeight: 800,
+                  fontSize: '0.86rem',
+                  borderRadius: 2.5,
+                  px: 2.5,
+                  py: 1,
+                  height: 46,
+                  boxShadow: '0 4px 12px rgba(0,51,89,.25)',
+                  '&:hover': { bgcolor: '#002642' },
+                }}
+              >
+                {asignando ? <CircularProgress size={20} color="inherit" /> : 'Asignar onsite'}
+              </Button>
+            </Box>
+          </Box>
+        </Paper>
+
+        {/* 3. Tabla concentradora */}
+        <Paper elevation={0} sx={{ ...cardSx, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+              display: 'flex',
+              flexDirection: { xs: 'column', lg: 'row' },
+              justifyContent: 'space-between',
+              alignItems: { xs: 'flex-start', lg: 'center' },
+              gap: 2,
+              borderBottom: '1px solid #E2E8F0',
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: '0.9rem', fontWeight: 700, color: '#0F172A' }}>
+                Tabla concentradora de Onsite
+              </Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                {kpis.total} servicios registrados · {kpis.finalizados} finalizados
+              </Typography>
+            </Box>
+
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.5}
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+            >
+              <Box sx={{ bgcolor: '#EEF2F6', p: 0.5, borderRadius: 2.5, display: 'inline-flex' }}>
+                {['Todos', 'Pendientes', 'En atención', 'Finalizados'].map((tab) => (
+                  <Button
+                    key={tab}
+                    size="small"
+                    onClick={() => {
+                      setFiltroEstatus(tab);
+                      setPagina(1);
+                    }}
+                    sx={{
+                      textTransform: 'none',
+                      fontSize: '0.76rem',
+                      fontWeight: 700,
+                      px: 1.6,
+                      py: 0.5,
+                      borderRadius: 2,
+                      color: filtroEstatus === tab ? '#0F172A' : '#64748B',
+                      bgcolor: filtroEstatus === tab ? '#FFFFFF' : 'transparent',
+                      boxShadow: filtroEstatus === tab ? '0 1px 3px rgba(15,23,42,.1)' : 'none',
+                      '&:hover': { bgcolor: filtroEstatus === tab ? '#FFFFFF' : 'rgba(0,0,0,0.03)' },
+                    }}
+                  >
+                    {tab}
+                  </Button>
+                ))}
+              </Box>
+
+              <TextField
+                size="small"
+                placeholder="Buscar por folio, incidente o ubicación…"
+                value={busqueda}
+                onChange={(e) => {
+                  setBusqueda(e.target.value);
+                  setPagina(1);
+                }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchOutlined sx={{ fontSize: 18, color: '#94A3B8' }} />
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      fontSize: '0.8rem',
+                      borderRadius: 2.5,
+                      bgcolor: '#F8FAFC',
+                      '& fieldset': { borderColor: '#E2E8F0' },
+                    },
+                  },
+                }}
+                sx={{ minWidth: { xs: '100%', sm: 280 } }}
+              />
+            </Stack>
+          </Box>
+
+          <TableContainer>
+            <Table sx={{ minWidth: 800 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={thSx}>Fecha</TableCell>
+                  <TableCell sx={thSx}>Folio</TableCell>
+                  <TableCell sx={thSx}>Incidente / Resumen</TableCell>
+                  <TableCell sx={thSx}>Ubicación</TableCell>
+                  <TableCell sx={thSx}>ISM/MESA asignado</TableCell>
+                  <TableCell sx={thSx}>Estatus</TableCell>
+                  <TableCell align="right" sx={thSx}>
+                    Acciones
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {cargando ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                      <CircularProgress size={30} sx={{ color: '#003359' }} />
+                      <Typography sx={{ fontSize: '0.82rem', color: '#64748B', mt: 1 }}>
+                        Cargando servicios de Onsite...
                       </Typography>
-                      <Typography sx={{ color: TOKENS.text3, mt: 0.5, fontSize: '0.78rem' }}>
-                        Crea un incidente con el botón “Crear incidente” para verlo aquí.
+                    </TableCell>
+                  </TableRow>
+                ) : incidentesPaginados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 6, border: 0 }}>
+                      <InboxOutlined sx={{ fontSize: 36, color: '#CBD5E1' }} />
+                      <Typography sx={{ fontSize: '0.88rem', color: '#475569', fontWeight: 700 }}>
+                        No se encontraron registros de Onsite
                       </Typography>
-                    </td>
-                  </tr>
+                      <Typography sx={{ fontSize: '0.74rem', color: '#94A3B8' }}>
+                        Aquí aparecerán los incidentes que registre el supervisor.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  filteredIncidents.map((inc) => {
-                    const st = getStatusStyle(inc.estatus);
-                    const ismName = inc.ismMesa || '';
+                  incidentesPaginados.map((item) => {
+                    const tecnicoStr = nombreTecnico(item);
                     return (
-                      <tr key={inc.id ?? inc.folio}>
-                        <td>{inc.fecha}</td>
-                        <td>
-                          <Typography
-                            sx={{
-                              fontFamily: '"Cascadia Code", "Consolas", monospace',
-                              fontWeight: 600,
-                              color: '#155E9C',
-                              fontSize: '0.8rem',
-                            }}
-                          >
-                            {inc.folio}
+                      <TableRow key={item.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                        <TableCell sx={{ fontSize: '0.8rem', color: '#475569', py: 1.4 }}>
+                          {item.fecha || item.creado_en
+                            ? new Date(item.fecha || item.creado_en).toLocaleDateString()
+                            : '—'}
+                        </TableCell>
+
+                        <TableCell sx={{ fontFamily: MONO, fontWeight: 700, fontSize: '0.82rem', color: '#155E9C', py: 1.4 }}>
+                          {item.folio || '—'}
+                        </TableCell>
+
+                        <TableCell sx={{ py: 1.4 }}>
+                          <Typography sx={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}>
+                            {item.resumen || item.titulo || 'Sin título'}
                           </Typography>
-                        </td>
-                        <td>
-                          <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, color: TOKENS.text }}>
-                            {inc.incidente || inc.resumen}
-                          </Typography>
-                          {inc.descripcion && (
-                            <Typography sx={{ fontSize: '0.72rem', color: TOKENS.text3, mt: 0.25 }}>
-                              {inc.descripcion.length > 70
-                                ? `${inc.descripcion.slice(0, 70)}…`
-                                : inc.descripcion}
+                          {item.descripcion && (
+                            <Typography noWrap sx={{ fontSize: '0.72rem', color: '#94A3B8', maxWidth: 280 }}>
+                              {item.descripcion}
                             </Typography>
                           )}
-                        </td>
-                        <td>{inc.ubicacion}</td>
-                        <td>
-                          {ismName ? (
-                            <Stack direction="row" alignItems="center" spacing={1}>
+                        </TableCell>
+
+                        <TableCell sx={{ fontSize: '0.8rem', color: '#475569', py: 1.4 }}>
+                          {item.ubicacion || '—'}
+                        </TableCell>
+
+                        <TableCell sx={{ py: 1.4 }}>
+                          {tecnicoStr ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Avatar
                                 sx={{
                                   width: 26,
                                   height: 26,
-                                  fontSize: '0.62rem',
+                                  fontSize: '0.68rem',
                                   fontWeight: 700,
-                                  background: 'linear-gradient(135deg, #0E9F6E, #067A55)',
+                                  background: 'linear-gradient(135deg,#0E9F6E,#067A55)',
                                 }}
                               >
-                                {ismName.trim().charAt(0).toUpperCase()}
+                                {getInit(tecnicoStr)}
                               </Avatar>
-                              <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, color: TOKENS.text }}>
-                                {ismName}
+                              <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: '#0F172A' }}>
+                                {tecnicoStr}
                               </Typography>
-                            </Stack>
+                            </Box>
                           ) : (
-                            <Typography sx={{ fontSize: '0.8rem', color: TOKENS.text3 }}>
-                              Sin asignar
-                            </Typography>
+                            <Typography sx={{ fontSize: '0.8rem', color: '#94A3B8' }}>Sin asignar</Typography>
                           )}
-                        </td>
-                        <td>
-                          <Chip
-                            size="small"
-                            label={st.label}
-                            sx={{
-                              bgcolor: st.background,
-                              color: st.color,
-                              fontWeight: 700,
-                              fontSize: '0.7rem',
-                              borderRadius: '20px',
-                              '& .MuiChip-label': { display: 'flex', alignItems: 'center' },
-                            }}
-                          />
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <Tooltip title="Editar incidente / Cambiar asignación">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenEdit(inc)}
-                              sx={{
-                                color: TOKENS.text2,
-                                border: `1px solid ${TOKENS.border}`,
-                                borderRadius: 1.5,
-                                width: 30,
-                                height: 30,
-                                '&:hover': {
-                                  color: TOKENS.primary,
-                                  bgcolor: '#EAF2FA',
-                                  borderColor: '#BFD3E8',
-                                },
-                              }}
-                            >
-                              <EditOutlined sx={{ fontSize: 15 }} />
+                        </TableCell>
+
+                        <TableCell sx={{ py: 1.4 }}>{renderStatusChip(item.estatus)}</TableCell>
+
+                        <TableCell align="right" sx={{ py: 1.4 }}>
+                          <Stack direction="row" spacing={0.6} justifyContent="flex-end">
+                            <IconButton size="small" onClick={() => setModalDetalle(item)} title="Ver detalle" sx={iconBtnSx}>
+                              <VisibilityOutlined fontSize="small" />
                             </IconButton>
-                          </Tooltip>
-                        </td>
-                      </tr>
+                            <IconButton size="small" onClick={() => abrirEdicion(item)} title="Editar" sx={iconBtnSx}>
+                              <EditOutlined fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
                     );
                   })
                 )}
-              </tbody>
-            </Box>
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Pie / paginación */}
+          <Box
+            sx={{
+              px: 3,
+              py: 1.6,
+              borderTop: '1px solid #E2E8F0',
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              justifyContent: 'space-between',
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              gap: 1.5,
+            }}
+          >
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<DownloadOutlined />}
+              onClick={exportarCSV}
+              disabled={!incidentes.length}
+              sx={{
+                textTransform: 'none',
+                color: '#475569',
+                borderColor: '#E2E8F0',
+                borderRadius: 2.5,
+                fontWeight: 700,
+                fontSize: '0.74rem',
+                '&:hover': { bgcolor: '#F1F5F9', borderColor: '#E2E8F0' },
+              }}
+            >
+              Exportar CSV
+            </Button>
+
+            <Stack direction="row" spacing={1.2} alignItems="center">
+              <Typography sx={{ fontSize: '0.74rem', color: '#94A3B8' }}>
+                {mostrados} de {incidentesFiltrados.length} registros
+              </Typography>
+              <IconButton
+                size="small"
+                disabled={pagina <= 1}
+                onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                sx={iconBtnSx}
+              >
+                <NavigateBefore fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                disabled={pagina >= totalPaginas}
+                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                sx={iconBtnSx}
+              >
+                <NavigateNext fontSize="small" />
+              </IconButton>
+            </Stack>
           </Box>
         </Paper>
 
-        {/* MODAL CREAR / EDITAR INCIDENTE */}
+        {/* Modal detalle */}
         <Dialog
-          open={openModal}
-          onClose={() => setOpenModal(false)}
-          maxWidth="md"
+          open={Boolean(modalDetalle)}
+          onClose={() => setModalDetalle(null)}
+          maxWidth="sm"
           fullWidth
-          PaperProps={{ sx: { borderRadius: 3 } }}
+          PaperProps={{ sx: { borderRadius: 2.5, p: 1 } }}
         >
-          <DialogTitle sx={{ fontWeight: 700, color: TOKENS.text, fontSize: '1.05rem', pb: 1 }}>
-            {isEditing ? `Editar Incidente #${incidentForm.folio}` : 'Registrar Incidente Onsite (ITSM)'}
+          <DialogTitle
+            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, fontSize: '1.1rem', color: '#0F172A' }}
+          >
+            Detalle del Incidente
+            <IconButton size="small" onClick={() => setModalDetalle(null)}>
+              <CloseOutlined fontSize="small" />
+            </IconButton>
           </DialogTitle>
-          <Box component="form" onSubmit={handleSaveIncident}>
-            <DialogContent dividers sx={{ py: 2.5 }}>
-              <Stack spacing={2.5}>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                  <TextField
-                    label="Folio / Ticket"
-                    value={incidentForm.folio}
-                    onChange={(e) => setIncidentForm({ ...incidentForm, folio: e.target.value })}
-                    required
-                    fullWidth
-                    size="small"
-                    slotProps={{
-                      input: {
-                        sx: { fontFamily: '"Cascadia Code", "Consolas", monospace', fontWeight: 600 },
-                      },
-                    }}
-                  />
-                  <TextField
-                    label="Compañía / Cliente"
-                    placeholder="Escribe la compañía o cliente"
-                    value={incidentForm.compania}
-                    onChange={(e) => setIncidentForm({ ...incidentForm, compania: e.target.value })}
-                    fullWidth
-                    size="small"
-                  />
+          {modalDetalle && (
+            <DialogContent dividers sx={{ borderColor: '#E2E8F0' }}>
+              <Stack spacing={2}>
+                <Box>
+                  <Typography sx={labelSx}>Folio</Typography>
+                  <Typography sx={{ fontFamily: MONO, fontSize: '1.15rem', fontWeight: 800, color: '#155E9C' }}>
+                    {modalDetalle.folio || '—'}
+                  </Typography>
                 </Box>
-
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                  <TextField
-                    label="Sitio / Ubicación"
-                    placeholder="Ej. CEDIS Puerto Escondido"
-                    value={incidentForm.nombreSitio}
-                    onChange={(e) =>
-                      setIncidentForm({
-                        ...incidentForm,
-                        nombreSitio: e.target.value,
-                        idSitio: e.target.value,
-                      })
-                    }
-                    fullWidth
-                    size="small"
-                  />
-
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="modal-ism-label">Asignar a ISM/MESA</InputLabel>
-                    <Select
-                      labelId="modal-ism-label"
-                      value={incidentForm.idIsmAsignado}
-                      label="Asignar a ISM/MESA"
-                      onChange={(e) => setIncidentForm({ ...incidentForm, idIsmAsignado: e.target.value })}
-                    >
-                      <MenuItem value="">Sin asignar (Pendiente)</MenuItem>
-                      {engineers.map((eng) => (
-                        <MenuItem key={eng.id} value={eng.id}>
-                          {eng.nombre} {String(eng.estatus || '').toLowerCase() === 'mesa' ? '(Disponible)' : `(${eng.estatus})`}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                <Box>
+                  <Typography sx={labelSx}>Resumen</Typography>
+                  <Typography sx={{ fontSize: '0.92rem', fontWeight: 700, color: '#0F172A' }}>
+                    {modalDetalle.resumen || modalDetalle.titulo || '—'}
+                  </Typography>
                 </Box>
+                {modalDetalle.descripcion && (
+                  <Box>
+                    <Typography sx={labelSx}>Descripción detallada</Typography>
+                    <Typography sx={{ fontSize: '0.85rem', color: '#475569', mt: 0.3 }}>
+                      {modalDetalle.descripcion}
+                    </Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                  <Box>
+                    <Typography sx={labelSx}>Ubicación</Typography>
+                    <Typography sx={{ fontSize: '0.85rem', color: '#0F172A', mt: 0.3 }}>
+                      {modalDetalle.ubicacion || '—'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={labelSx}>Estatus</Typography>
+                    <Box sx={{ mt: 0.5 }}>{renderStatusChip(modalDetalle.estatus)}</Box>
+                  </Box>
+                </Box>
+              </Stack>
+            </DialogContent>
+          )}
+          <DialogActions sx={{ p: 2 }}>
+            <Button
+              onClick={() => setModalDetalle(null)}
+              variant="contained"
+              disableElevation
+              sx={{ bgcolor: '#003359', borderRadius: 2, textTransform: 'none', fontWeight: 700, '&:hover': { bgcolor: '#002642' } }}
+            >
+              Cerrar
+            </Button>
+          </DialogActions>
+        </Dialog>
 
+        {/* Modal crear / editar */}
+        <Dialog
+          open={modalFormulario}
+          onClose={() => setModalFormulario(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: 2.5, p: 1 } }}
+        >
+          <form onSubmit={handleGuardarIncidente}>
+            <DialogTitle
+              sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, fontSize: '1.1rem', color: '#0F172A' }}
+            >
+              {editandoId ? 'Editar Incidente' : 'Nuevo Incidente'}
+              <IconButton size="small" onClick={() => setModalFormulario(false)}>
+                <CloseOutlined fontSize="small" />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers sx={{ borderColor: '#E2E8F0' }}>
+              <Stack spacing={2} sx={{ pt: 1 }}>
                 <TextField
-                  label="Resumen del problema (Summary)"
-                  placeholder="Ej. Equipo sin conexión a switch"
-                  value={incidentForm.resumen}
-                  onChange={(e) => setIncidentForm({ ...incidentForm, resumen: e.target.value })}
-                  required
                   fullWidth
                   size="small"
+                  label="Folio de Ivanti *"
+                  value={formulario.folio}
+                  onChange={(e) => setFormulario({ ...formulario, folio: e.target.value })}
+                  slotProps={{ input: { sx: { fontFamily: MONO, borderRadius: 2 } } }}
                 />
-
                 <TextField
-                  label="Descripción técnica detallada"
-                  placeholder="Instrucciones o detalles para el ingeniero…"
-                  value={incidentForm.descripcion}
-                  onChange={(e) => setIncidentForm({ ...incidentForm, descripcion: e.target.value })}
-                  multiline
-                  minRows={3}
                   fullWidth
+                  size="small"
+                  label="Resumen / Asunto *"
+                  value={formulario.resumen}
+                  onChange={(e) => setFormulario({ ...formulario, resumen: e.target.value })}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                 />
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  size="small"
+                  label="Descripción adicional"
+                  value={formulario.descripcion}
+                  onChange={(e) => setFormulario({ ...formulario, descripcion: e.target.value })}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Ubicación"
+                  value={formulario.ubicacion}
+                  onChange={(e) => setFormulario({ ...formulario, ubicacion: e.target.value })}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel id="tecnico-form-label">Técnico ISM/MESA</InputLabel>
+                  <Select
+                    labelId="tecnico-form-label"
+                    label="Técnico ISM/MESA"
+                    value={formulario.tecnicoId}
+                    onChange={(e) => setFormulario({ ...formulario, tecnicoId: e.target.value })}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    <MenuItem value="">
+                      <em>Sin asignar</em>
+                    </MenuItem>
+                    {tecnicosIsmDisponibles.map((t) => {
+                      const nom = getNombreUsuario(t);
+                      return (
+                        <MenuItem key={t.id} value={t.id}>
+                          {nom}
+                        </MenuItem>
+                      );
+                    })}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="estatus-form-label">Estatus</InputLabel>
+                  <Select
+                    labelId="estatus-form-label"
+                    label="Estatus"
+                    value={formulario.estatus}
+                    onChange={(e) => setFormulario({ ...formulario, estatus: e.target.value })}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    <MenuItem value="Pendiente">Pendiente</MenuItem>
+                    <MenuItem value="En atención">En atención</MenuItem>
+                    <MenuItem value="Finalizado">Finalizado</MenuItem>
+                  </Select>
+                </FormControl>
               </Stack>
             </DialogContent>
             <DialogActions sx={{ p: 2 }}>
               <Button
-                onClick={() => setOpenModal(false)}
-                disabled={savingIncident}
-                sx={{ textTransform: 'none', fontWeight: 600, color: TOKENS.text2 }}
+                onClick={() => setModalFormulario(false)}
+                sx={{ textTransform: 'none', color: '#64748B', fontWeight: 700 }}
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
                 variant="contained"
-                disabled={savingIncident}
-                startIcon={savingIncident ? <CircularProgress size={16} color="inherit" /> : null}
-                sx={{
-                  bgcolor: TOKENS.primary,
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  borderRadius: 1.5,
-                  boxShadow: '0 6px 14px -6px rgba(0,51,89,.5)',
-                  '&:hover': { bgcolor: '#00223D' },
-                }}
+                disableElevation
+                disabled={guardandoForm}
+                sx={{ bgcolor: '#003359', borderRadius: 2, textTransform: 'none', fontWeight: 700, '&:hover': { bgcolor: '#002642' } }}
               >
-                {savingIncident ? 'Guardando…' : isEditing ? 'Guardar cambios' : 'Crear incidente'}
+                {guardandoForm ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
               </Button>
             </DialogActions>
-          </Box>
+          </form>
         </Dialog>
       </Box>
     </DashboardLayout>
   );
 }
-
-export default OnsiteDistributionPage;
