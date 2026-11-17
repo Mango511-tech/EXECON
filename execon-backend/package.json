@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js",
+    "migrate": "node db/migrate.js",
     "test": "echo \"No hay pruebas configuradas\" && exit 0"
   },
   "keywords": [

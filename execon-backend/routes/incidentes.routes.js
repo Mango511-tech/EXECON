@@ -1,8 +1,10 @@
 const express = require('express');
 const pool = require('../db/pool');
 const verificarToken = require('../middleware/auth');
+const { permitirRoles } = require('../middleware/auth');
 
 const router = express.Router();
+router.use(verificarToken);
 
 function normalizarPrioridad(prio) {
   const clean = String(prio || '3').trim().toUpperCase();
@@ -10,10 +12,20 @@ function normalizarPrioridad(prio) {
   return match ? `P${match[1]}` : 'P3';
 }
 
+function normalizarEstatus(estatus) {
+  const clean = String(estatus || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+  if (clean === 'ASIGNADO') return 'EN ATENCION';
+  return ['PENDIENTE', 'EN ATENCION', 'FINALIZADO'].includes(clean) ? clean : null;
+}
+
 /* =========================================================
    1. GET /api/incidentes (LISTAR TODOS LOS INCIDENTES)
    ========================================================= */
-router.get('/', async (req, res) => {
+router.get('/', permitirRoles('admin', 'supervisor', 'distribuidor', 'ISM/MESA'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -51,7 +63,7 @@ router.get('/', async (req, res) => {
 /* =========================================================
    2. POST /api/incidentes (REGISTRAR NUEVO INCIDENTE)
    ========================================================= */
-router.post('/', async (req, res) => {
+router.post('/', permitirRoles('admin', 'supervisor', 'distribuidor'), async (req, res) => {
   try {
     const {
       folio,
@@ -66,13 +78,18 @@ router.post('/', async (req, res) => {
       idSitio,
       prioridad,
       idIsmAsignado,
-      asignadoPor,
-    } = req.body;
+      estatus,
+    } = req.body || {};
 
     const textoFolio = String(folio || `FOL-${Date.now().toString().slice(-6)}`).trim();
     const textoResumen = String(resumen || descripcion || 'Incidente Onsite registrado').trim();
     const textoCliente = String(compania || clienteNombre || 'Cliente General').trim();
     const textoUbicacion = String(nombreSitio || plaza || 'Sin ubicación').trim();
+    const estatusSolicitado = estatus === undefined ? null : normalizarEstatus(estatus);
+
+    if (estatus !== undefined && !estatusSolicitado) {
+      return res.status(400).json({ success: false, message: 'El estatus del incidente no es válido.' });
+    }
 
     // 1. Obtener ID del agente ISM/MESA asignado
     let parsedIsmId = null;
@@ -89,16 +106,10 @@ router.post('/', async (req, res) => {
     }
 
     // 2. Obtener creador del incidente
-    let parsedCreador = asignadoPor && !isNaN(Number(asignadoPor)) ? Number(asignadoPor) : null;
-    if (!parsedCreador) {
-      const userResult = await pool.query(
-        "SELECT id FROM public.usuarios WHERE LOWER(rol) IN ('admin', 'supervisor', 'distribuidor') ORDER BY id ASC LIMIT 1"
-      );
-      parsedCreador = userResult.rows[0]?.id || 1;
-    }
+    const parsedCreador = req.usuario.id;
 
     const prioridadLimpia = normalizarPrioridad(prioridad);
-    const estatusInicial = parsedIsmId ? 'EN ATENCION' : 'PENDIENTE';
+    const estatusInicial = estatusSolicitado || (parsedIsmId ? 'EN ATENCION' : 'PENDIENTE');
 
     const result = await pool.query(
       `
@@ -158,16 +169,41 @@ router.post('/', async (req, res) => {
 /* =========================================================
    3. PUT /api/incidentes/:id (ASIGNAR / CONCLUIR INCIDENTE)
    ========================================================= */
-router.put('/:id', async (req, res) => {
+router.put('/:id', permitirRoles('admin', 'supervisor', 'distribuidor', 'ISM/MESA'), async (req, res) => {
   const incidenteId = Number(req.params.id);
-  const { idIsmAsignado, estatus, fin, duracionMinutos } = req.body;
+  const body = req.body || {};
+  const {
+    idIsmAsignado,
+    estatus,
+    fin,
+    duracionMinutos,
+    folio,
+    resumen,
+    descripcion,
+    nombreSitio,
+    ubicacion,
+    plaza,
+  } = body;
 
   if (!Number.isInteger(incidenteId) || incidenteId <= 0) {
     return res.status(400).json({ success: false, message: 'ID de incidente inválido.' });
   }
 
+  const isIsm = req.usuario.rol === 'ISM/MESA';
+  const isDistributor = req.usuario.rol === 'distribuidor';
+  if (
+    isIsm &&
+    ['folio', 'resumen', 'nombreSitio', 'ubicacion', 'plaza'].some((field) =>
+      Object.prototype.hasOwnProperty.call(body, field)
+    )
+  ) {
+    return res.status(403).json({ success: false, message: 'No tienes permisos para modificar estos datos del incidente.' });
+  }
+
   try {
     let parsedIsmId = null;
+    const hasAssignment = Object.prototype.hasOwnProperty.call(body, 'idIsmAsignado');
+    const clearAssignment = hasAssignment && (idIsmAsignado === null || idIsmAsignado === '');
     if (idIsmAsignado !== undefined && idIsmAsignado !== null) {
       if (!isNaN(Number(idIsmAsignado))) {
         parsedIsmId = Number(idIsmAsignado);
@@ -176,22 +212,75 @@ router.put('/:id', async (req, res) => {
           'SELECT id FROM public.usuarios WHERE LOWER(nombre_completo) = LOWER($1) LIMIT 1',
           [String(idIsmAsignado).trim()]
         );
-        if (ismSearch.rowCount > 0) parsedIsmId = ismSearch.rows[0].id;
+        if (ismSearch.rowCount === 0) {
+          return res.status(400).json({ success: false, message: 'El usuario ISM/MESA indicado no existe.' });
+        }
+        parsedIsmId = ismSearch.rows[0].id;
       }
     }
 
+    const estatusLimpio = estatus === undefined ? null : normalizarEstatus(estatus);
+    if (estatus !== undefined && !estatusLimpio) {
+      return res.status(400).json({ success: false, message: 'El estatus del incidente no es válido.' });
+    }
+    if (
+      isIsm &&
+      ((parsedIsmId !== null && parsedIsmId !== req.usuario.id) ||
+        (clearAssignment && estatusLimpio !== 'FINALIZADO') ||
+        ((fin !== undefined || duracionMinutos !== undefined) && estatusLimpio !== 'FINALIZADO') ||
+        (estatusLimpio !== null && !['EN ATENCION', 'FINALIZADO'].includes(estatusLimpio)))
+    ) {
+      return res.status(403).json({ success: false, message: 'No tienes permisos para realizar esta actualización.' });
+    }
+    if (
+      isDistributor &&
+      ((clearAssignment && hasAssignment) ||
+        (estatusLimpio !== null && estatusLimpio !== 'EN ATENCION') ||
+        ['fin', 'duracionMinutos', 'folio', 'resumen', 'descripcion', 'nombreSitio', 'ubicacion', 'plaza'].some((field) =>
+          Object.prototype.hasOwnProperty.call(body, field)
+        ))
+    ) {
+      return res.status(403).json({ success: false, message: 'No tienes permisos para realizar esta actualización.' });
+    }
+
+    const optionalText = (value) => (value === undefined || value === null ? null : String(value).trim());
     const result = await pool.query(
       `
         UPDATE public.incidentes
         SET
-          id_ism_asignado = COALESCE($1, id_ism_asignado),
-          estatus = COALESCE($2, estatus),
-          hora_fin = COALESCE($3, hora_fin),
-          duracion_minutos = COALESCE($4, duracion_minutos)
-        WHERE id = $5
+          id_ism_asignado = CASE
+            WHEN $1 THEN NULL
+            WHEN $2 THEN $3
+            ELSE id_ism_asignado
+          END,
+          estatus = COALESCE($4, estatus),
+          hora_fin = COALESCE($5, hora_fin),
+          duracion_minutos = COALESCE($6, duracion_minutos),
+          folio = COALESCE($7, folio),
+          resumen = COALESCE($8, resumen),
+          descripcion = COALESCE($9, descripcion),
+          nombre_sitio = COALESCE($10, nombre_sitio),
+          plaza = COALESCE($11, plaza)
+        WHERE id = $12
+          AND ($13 = FALSE OR id_ism_asignado = $14)
         RETURNING *
       `,
-      [parsedIsmId, estatus || 'EN ATENCION', fin || null, duracionMinutos || null, incidenteId]
+      [
+        clearAssignment,
+        hasAssignment,
+        parsedIsmId,
+        estatusLimpio,
+        fin || null,
+        duracionMinutos || null,
+        optionalText(folio),
+        optionalText(resumen),
+        optionalText(descripcion),
+        optionalText(nombreSitio ?? ubicacion),
+        optionalText(plaza),
+        incidenteId,
+        isIsm,
+        req.usuario.id,
+      ],
     );
 
     if (result.rowCount === 0) {
