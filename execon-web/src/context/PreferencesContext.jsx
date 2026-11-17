@@ -25,7 +25,41 @@ export const translations = {
     navUsers: 'Gestión de Usuarios',
     navConfig: 'Configuración',
     navLogout: 'Cerrar sesión',
+    confirmSignOut: '¿Confirmas que deseas cerrar sesión?',
     userRoleAdmin: 'Supervisor / Admin',
+    userRoleDistributor: 'Distribuidor',
+    userRoleIsm: 'ISM / Mesa',
+    navOperations: 'Operación',
+    navPersonnel: 'Personal',
+    navAdministration: 'Administración',
+    navLoggedIncidents: 'Incidentes loggeados',
+    navOnsiteAssignment: 'Asignación de onsite',
+    navInAttention: 'Incidentes en atención',
+    navIsmShift: 'Registro de turno',
+    navIsmIncidents: 'Mis incidentes',
+    navIsmDuration: 'Duración de actividades',
+    settingsAppearance: 'Tema de color',
+    settingsLanguage: 'Idioma / Language',
+    settingsAdvanced: 'Configuración avanzada',
+    languageSpanish: 'Español',
+    languageEnglish: 'English',
+    themeLight: 'Claro',
+    themeDark: 'Oscuro',
+    themeSystem: 'Sistema',
+    ismOverviewTitle: 'Centro de trabajo ISM',
+    ismOverviewDescription: 'Consulta tu jornada, administra los incidentes asignados y revisa tus actividades.',
+    ismTabOverview: 'Resumen',
+    ismTabShift: 'Mi turno',
+    ismTabIncidents: 'Incidentes',
+    ismTabDuration: 'Duración',
+    distributorTitle: 'Panel del distribuidor',
+    distributorOverviewDescription: 'Supervisa la disponibilidad de ISM y el estado de los incidentes.',
+    distAvailableDesk: 'Disponibles en mesa',
+    distPendingOnsites: 'Onsites pendientes',
+    distInAttention: 'En atención',
+    distAverageDuration: 'Tiempo promedio',
+    distAvailabilityTitle: 'Disponibilidad y horarios de los ISM/MESA',
+    distLoggedSearch: 'Buscar por folio, cliente, resumen o ubicación...',
     dashTitle: 'Vista General',
     statusMesa: 'En mesa',
     statusCampo: 'En campo',
@@ -57,7 +91,41 @@ export const translations = {
     navUsers: 'User Management',
     navConfig: 'Settings',
     navLogout: 'Sign out',
+    confirmSignOut: 'Are you sure you want to sign out?',
     userRoleAdmin: 'Supervisor / Admin',
+    userRoleDistributor: 'Distributor',
+    userRoleIsm: 'ISM / Desk',
+    navOperations: 'Operations',
+    navPersonnel: 'People',
+    navAdministration: 'Administration',
+    navLoggedIncidents: 'Logged incidents',
+    navOnsiteAssignment: 'Onsite assignment',
+    navInAttention: 'Incidents in progress',
+    navIsmShift: 'Shift log',
+    navIsmIncidents: 'My incidents',
+    navIsmDuration: 'Activity duration',
+    settingsAppearance: 'Color theme',
+    settingsLanguage: 'Language',
+    settingsAdvanced: 'Advanced settings',
+    languageSpanish: 'Spanish',
+    languageEnglish: 'English',
+    themeLight: 'Light',
+    themeDark: 'Dark',
+    themeSystem: 'System',
+    ismOverviewTitle: 'ISM Work Center',
+    ismOverviewDescription: 'Review your shift, manage assigned incidents, and track completed activities.',
+    ismTabOverview: 'Overview',
+    ismTabShift: 'My shift',
+    ismTabIncidents: 'Incidents',
+    ismTabDuration: 'Duration',
+    distributorTitle: 'Distributor dashboard',
+    distributorOverviewDescription: 'Monitor ISM availability and incident status.',
+    distAvailableDesk: 'Available at desk',
+    distPendingOnsites: 'Pending onsite visits',
+    distInAttention: 'In progress',
+    distAverageDuration: 'Average duration',
+    distAvailabilityTitle: 'ISM/Desk availability and schedules',
+    distLoggedSearch: 'Search by ticket, customer, summary, or location...',
     dashTitle: 'Overview',
     statusMesa: 'At desk',
     statusCampo: 'In field',
@@ -166,19 +234,34 @@ export function PreferencesProvider({ children }) {
     document.documentElement.lang = preferences.idioma;
     document.documentElement.dataset.theme = mode;
     document.documentElement.style.colorScheme = mode;
+    document.documentElement.style.setProperty('--app-background', mode === 'dark' ? '#0B0F19' : '#F8FAFC');
+    document.documentElement.style.setProperty('--app-foreground', mode === 'dark' ? '#F1F5F9' : '#0F172A');
+    document.documentElement.style.setProperty('--app-muted', mode === 'dark' ? '#94A3B8' : '#64748B');
+    document.documentElement.style.setProperty('--app-paper', mode === 'dark' ? '#111827' : '#FFFFFF');
+    document.documentElement.style.setProperty('--app-border', mode === 'dark' ? '#1E293B' : '#E2E8F0');
+    document.documentElement.style.setProperty('--app-table-header', mode === 'dark' ? '#172033' : '#F8FAFC');
+    document.documentElement.style.setProperty('--app-row-hover', mode === 'dark' ? '#162033' : '#F8FBFF');
   }, [mode, preferences.idioma, location.pathname]);
 
   async function savePreferences(next) {
-    if (!token) return;
+    if (!token) throw new Error('Se requiere una sesión para guardar preferencias.');
     const payload = clean(next);
+    const previous = preferences;
+    if (localStorage.getItem('execon_token') === token) {
+      setRecord({ token, data: payload });
+    }
     try {
       const { data } = await api.patch('/auth/preferencias', payload);
-      if (localStorage.getItem('execon_token') === token && data?.data) {
+      if (!data?.data) throw new Error('El servidor no devolvió las preferencias guardadas.');
+      if (localStorage.getItem('execon_token') === token) {
         setRecord({ token, data: clean(data.data) });
       }
       return data;
-    } catch {
-      setRecord({ token, data: payload });
+    } catch (error) {
+      if (localStorage.getItem('execon_token') === token) {
+        setRecord({ token, data: previous });
+      }
+      throw error;
     }
   }
 

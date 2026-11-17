@@ -14,7 +14,6 @@ import ShiftManagementPage from './pages/ShiftManagementPage';
 import UserManagementPage from './pages/UserManagementPage';
 
 import DistributorOverviewPage from './pages/distribuidor/DistributorOverviewPage';
-import DistributorSettingsPage from './pages/distribuidor/DistributorSettingsPage';
 
 import IsmMesaDashboardPage from './pages/ism/IsmMesaDashboardPage';
 
@@ -269,27 +268,19 @@ function App() {
 
       <Route
         path="/distribuidor/en-atencion"
-        element={
-          <RutaProtegida rolesPermitidos={ROLES_DISTRIBUIDOR}>
-            <DistributorOverviewPage />
-          </RutaProtegida>
-        }
+        element={<Navigate to="/distribuidor/incidentes" replace />}
       />
 
       <Route
         path="/distribuidor/turnos"
-        element={
-          <RutaProtegida rolesPermitidos={ROLES_DISTRIBUIDOR}>
-            <DistributorOverviewPage />
-          </RutaProtegida>
-        }
+        element={<Navigate to="/distribuidor" replace />}
       />
 
       <Route
         path="/distribuidor/configuracion"
         element={
           <RutaProtegida rolesPermitidos={ROLES_DISTRIBUIDOR}>
-            <DistributorSettingsPage />
+            <SettingsPage layout="distributor" />
           </RutaProtegida>
         }
       />
@@ -308,27 +299,24 @@ function App() {
 
       <Route
         path="/ism/incidentes"
-        element={
-          <RutaProtegida rolesPermitidos={ROLES_ISM}>
-            <IsmMesaDashboardPage />
-          </RutaProtegida>
-        }
+        element={<Navigate to="/ism" replace />}
       />
 
       <Route
         path="/ism/turnos"
-        element={
-          <RutaProtegida rolesPermitidos={ROLES_ISM}>
-            <IsmMesaDashboardPage />
-          </RutaProtegida>
-        }
+        element={<Navigate to="/ism" replace />}
       />
 
       <Route
         path="/ism/duracion"
+        element={<Navigate to="/ism" replace />}
+      />
+
+      <Route
+        path="/ism/configuracion"
         element={
           <RutaProtegida rolesPermitidos={ROLES_ISM}>
-            <IsmMesaDashboardPage />
+            <SettingsPage layout="ism" />
           </RutaProtegida>
         }
       />

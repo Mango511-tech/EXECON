@@ -4,25 +4,60 @@ table {
   width: 100%;
 }
 
+html {
+  font-size: clamp(14px, calc(14px + 0.12vw), 16px);
+}
+
+.dashboard-sidebar {
+  height: 100vh !important;
+  height: 100dvh !important;
+}
+
+.dashboard-main {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+@media (max-height: 720px) {
+  .dashboard-brand {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+}
+
 th {
   font-family: 'Plus Jakarta Sans', sans-serif !important;
   font-weight: 800 !important;
   font-size: 0.78rem !important;
   letter-spacing: 0.03em !important;
   text-transform: uppercase !important;
-  color: #64748B !important;
-  background-color: #F8FAFC !important;
+  color: var(--app-muted, #64748B) !important;
+  background-color: var(--app-table-header, #F8FAFC) !important;
 }
 
 td {
   font-family: 'Inter', sans-serif !important;
   font-size: 0.84rem !important;
-  color: #334155 !important;
-  border-bottom: 1px solid #EEF2F6 !important;
+  color: var(--app-foreground, #334155) !important;
+  border-bottom: 1px solid var(--app-border, #EEF2F6) !important;
 }
 
 tr:hover td {
-  background-color: #F8FBFF !important;
+  background-color: var(--app-row-hover, #F8FBFF) !important;
+}
+
+html[data-theme='dark'] main .MuiPaper-root {
+  background-color: var(--app-paper) !important;
+  border-color: var(--app-border) !important;
+}
+
+html[data-theme='dark'] main .MuiTypography-root {
+  color: var(--app-foreground) !important;
+}
+
+html[data-theme='dark'] .MuiDialog-paper {
+  background-color: var(--app-paper) !important;
+  color: var(--app-foreground);
 }
 
 /* Microinteracciones limpias para botones y tarjetas */

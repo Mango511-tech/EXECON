@@ -1,6 +1,9 @@
 import {
   AssignmentOutlined,
   CalendarMonthOutlined,
+  CheckOutlined,
+  ColorLensOutlined,
+  LanguageOutlined,
   GroupOutlined,
   GridViewOutlined,
   LogoutOutlined,
@@ -17,12 +20,17 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
   Paper,
   Stack,
   Tooltip,
   Typography,
+  Divider,
+  Alert,
 } from '@mui/material';
 
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { usePreferences } from '../context/PreferencesContext';
 
@@ -41,6 +49,7 @@ function NavLabel({ text }) {
   return (
     <Typography
       sx={{
+        display: { xs: 'none', md: 'block' },
         px: 2,
         pt: 2,
         pb: 0.75,
@@ -64,11 +73,14 @@ function NavItem({ item }) {
       <ListItemButton
         component={NavLink}
         to={item.path}
+        end={item.end}
+        title={item.text}
         sx={{
           position: 'relative',
           borderRadius: 1.5,
           py: 1.05,
-          px: 1.5,
+          px: { xs: 1, md: 1.5 },
+          justifyContent: { xs: 'center', md: 'flex-start' },
           color: NAV_TOKENS.idle,
           transition: 'background-color 160ms ease, color 160ms ease',
           '&:hover': {
@@ -96,15 +108,23 @@ function NavItem({ item }) {
       >
         <ListItemIcon
           className="nav-icon"
-          sx={{ color: 'inherit', minWidth: 36, '& svg': { fontSize: 19 } }}
+          sx={{
+            color: 'inherit',
+            minWidth: { xs: 0, md: 36 },
+            justifyContent: 'center',
+            '& svg': { fontSize: 19 },
+          }}
         >
           {item.icon}
         </ListItemIcon>
         <ListItemText
           primary={item.text}
-          primaryTypographyProps={{
-            fontSize: '0.83rem',
-            fontWeight: 600,
+          sx={{ display: { xs: 'none', md: 'block' } }}
+          slotProps={{
+            primary: {
+              fontSize: '0.83rem',
+              fontWeight: 600,
+            },
           }}
         />
       </ListItemButton>
@@ -112,13 +132,26 @@ function NavItem({ item }) {
   );
 }
 
-function DashboardLayout({ children }) {
-  const { t } = usePreferences();
-  const navigate = useNavigate();
+function getStoredUser() {
+  try {
+    const user = JSON.parse(localStorage.getItem('execon_usuario') || '{}');
+    return user && typeof user === 'object' ? user : {};
+  } catch {
+    return {};
+  }
+}
 
-  const userStored = JSON.parse(localStorage.getItem('execon_usuario') || '{}');
-  const role = (userStored.rol || '').toUpperCase();
-  const isDistributor = role === 'DISTRIBUIDOR' || role === 'DISTRIBUIDORONSITE';
+function DashboardLayout({ children, variant = 'supervisor' }) {
+  const { t, preferences, savePreferences } = usePreferences();
+  const navigate = useNavigate();
+  const [settingsAnchor, setSettingsAnchor] = useState(null);
+  const [settingsError, setSettingsError] = useState('');
+  const settingsOpen = Boolean(settingsAnchor);
+
+  const userStored = getStoredUser();
+  const isDistributor = variant === 'distributor';
+  const isIsm = variant === 'ism';
+  const homePath = isDistributor ? '/distribuidor' : isIsm ? '/ism' : '/dashboard';
 
   const nombreUsuario =
     userStored.nombreCompleto || userStored.nombre || 'Usuario';
@@ -130,36 +163,38 @@ function DashboardLayout({ children }) {
   const menuSections = isDistributor
     ? [
         {
-          label: 'Operación',
+          label: t('navOperations'),
           items: [
-            { text: t('navDistribution'), icon: <AssignmentOutlined />, path: '/distribucion-onsite' },
-          ],
-        },
-        {
-          label: 'Personal',
-          items: [
-            { text: t('navPlanning'), icon: <CalendarMonthOutlined />, path: '/planeacion' },
-            { text: t('navShifts'), icon: <QueryBuilderOutlined />, path: '/turnos' },
+            { text: t('navGeneral'), icon: <GridViewOutlined />, path: '/distribuidor', end: true },
           ],
         },
       ]
+    : isIsm
+      ? [
+          {
+            label: t('navOperations'),
+            items: [
+              { text: t('navGeneral'), icon: <GridViewOutlined />, path: '/ism', end: true },
+            ],
+          },
+        ]
     : [
         {
-          label: 'Operación',
+          label: t('navOperations'),
           items: [
             { text: t('navGeneral'), icon: <GridViewOutlined />, path: '/dashboard' },
             { text: t('navDistribution'), icon: <AssignmentOutlined />, path: '/distribucion-onsite' },
           ],
         },
         {
-          label: 'Personal',
+          label: t('navPersonnel'),
           items: [
             { text: t('navPlanning'), icon: <CalendarMonthOutlined />, path: '/planeacion' },
             { text: t('navShifts'), icon: <QueryBuilderOutlined />, path: '/turnos' },
           ],
         },
         {
-          label: 'Administración',
+          label: t('navAdministration'),
           items: [
             { text: t('navUsers'), icon: <GroupOutlined />, path: '/usuarios' },
           ],
@@ -167,9 +202,20 @@ function DashboardLayout({ children }) {
       ];
 
   const handleLogout = () => {
+    if (preferences.confirmarCierreSesion && !window.confirm(t('confirmSignOut'))) return;
     localStorage.removeItem('execon_token');
     localStorage.removeItem('execon_usuario');
     navigate('/login');
+  };
+
+  const updatePreference = async (key, value) => {
+    if (preferences[key] === value) return;
+    setSettingsError('');
+    try {
+      await savePreferences({ ...preferences, [key]: value });
+    } catch (error) {
+      setSettingsError(error.response?.data?.message || error.message || 'No se pudieron guardar las preferencias.');
+    }
   };
 
   return (
@@ -182,9 +228,10 @@ function DashboardLayout({ children }) {
     >
       {/* SIDEBAR CORPORATIVO */}
       <Paper
+        className="dashboard-sidebar"
         elevation={0}
         sx={{
-          width: 264,
+          width: { xs: 72, md: 235 },
           flexShrink: 0,
           height: '100vh',
           position: 'sticky',
@@ -199,23 +246,24 @@ function DashboardLayout({ children }) {
       >
         {/* LOGO DE LA EMPRESA EN PNG (enlace al dashboard) */}
         <Box
+          className="dashboard-brand"
           component={NavLink}
-          to="/dashboard"
+          to={homePath}
           sx={{
             display: 'flex',
             alignItems: 'center',
-            px: 2.5,
-            pt: 2.5,
+            px: { xs: 1, md: 2.5 },
+            pt: { xs: 1.5, md: 2.5 },
             pb: 2,
             textDecoration: 'none',
           }}
         >
           <Box
             component="img"
-            src="Execon_Logo.png" // Cambia la ruta según el nombre de tu archivo en public/
+            src="/Execon_Logo.png"
             alt="EXECON Smart Solutions"
             sx={{
-              maxHeight: 42,
+              maxHeight: { xs: 36, md: 42 },
               maxWidth: '100%',
               objectFit: 'contain',
               display: 'block',
@@ -238,7 +286,7 @@ function DashboardLayout({ children }) {
             },
           }}
         >
-          <List sx={{ px: 1.25, pb: 1.5 }}>
+          <List sx={{ px: { xs: 0.75, md: 1.25 }, pb: 1.5 }}>
             {menuSections.map((section) => (
               <Box key={section.label}>
                 <NavLabel text={section.label} />
@@ -253,13 +301,20 @@ function DashboardLayout({ children }) {
         {/* PIE: CONFIGURACIÓN + USUARIO + CERRAR SESIÓN */}
         <Box sx={{ p: 1.5, pt: 1.25, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           <ListItemButton
-            component={NavLink}
-            to="/configuracion"
+            id="dashboard-settings-button"
+            onClick={(event) => {
+              setSettingsError('');
+              setSettingsAnchor(event.currentTarget);
+            }}
+            title={t('navConfig')}
+            aria-haspopup="menu"
+            aria-expanded={settingsOpen ? 'true' : undefined}
             sx={{
               borderRadius: 1.5,
               mb: 1.25,
               py: 0.9,
-              px: 1.5,
+              px: { xs: 1, md: 1.5 },
+              justifyContent: { xs: 'center', md: 'flex-start' },
               color: NAV_TOKENS.idle,
               '&:hover': { bgcolor: 'rgba(255,255,255,0.06)', color: '#E2E8F0' },
               '&.active': {
@@ -271,17 +326,121 @@ function DashboardLayout({ children }) {
           >
             <ListItemIcon
               className="nav-icon"
-              sx={{ color: 'inherit', minWidth: 36, '& svg': { fontSize: 19 } }}
+              sx={{
+                color: 'inherit',
+                minWidth: { xs: 0, md: 36 },
+                justifyContent: 'center',
+                '& svg': { fontSize: 19 },
+              }}
             >
               <SettingsOutlined />
             </ListItemIcon>
             <ListItemText
               primary={t('navConfig')}
-              primaryTypographyProps={{ fontSize: '0.83rem', fontWeight: 600 }}
+              sx={{ display: { xs: 'none', md: 'block' } }}
+              slotProps={{ primary: { fontSize: '0.83rem', fontWeight: 600 } }}
             />
           </ListItemButton>
 
-          <Stack direction="row" alignItems="center" spacing={1.25}>
+          <Menu
+            anchorEl={settingsAnchor}
+            open={settingsOpen}
+            onClose={() => setSettingsAnchor(null)}
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            slotProps={{
+              paper: {
+                sx: {
+                  width: 264,
+                  p: 0.75,
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 2,
+                  boxShadow: '0 16px 40px rgba(15,23,42,.18)',
+                },
+              },
+            }}
+          >
+            <Box sx={{ px: 1.25, py: 0.75 }}>
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                <LanguageOutlined sx={{ color: '#64748B', fontSize: 17 }} />
+                <Typography sx={{ color: 'text.primary', fontSize: '0.78rem', fontWeight: 800 }}>
+                  {t('settingsLanguage')}
+                </Typography>
+              </Stack>
+            </Box>
+            {[
+              { value: 'es-MX', label: t('languageSpanish'), code: 'ES' },
+              { value: 'en-US', label: t('languageEnglish'), code: 'EN' },
+            ].map((language) => (
+              <MenuItem
+                key={language.value}
+                selected={preferences.idioma === language.value}
+                onClick={() => updatePreference('idioma', language.value)}
+                sx={{ minHeight: 38, borderRadius: 1.25, fontSize: '0.8rem' }}
+              >
+                <ListItemIcon sx={{ minWidth: 30, color: '#64748B', fontSize: '0.68rem', fontWeight: 800 }}>
+                  {language.code}
+                </ListItemIcon>
+                {language.label}
+                {preferences.idioma === language.value && <CheckOutlined sx={{ ml: 'auto', fontSize: 17, color: '#168A4A' }} />}
+              </MenuItem>
+            ))}
+            <Divider sx={{ my: 0.75 }} />
+            <Box sx={{ px: 1.25, py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ColorLensOutlined sx={{ color: '#64748B', fontSize: 17 }} />
+              <Typography sx={{ color: 'text.primary', fontSize: '0.75rem', fontWeight: 700 }}>
+                {t('settingsAppearance')}
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={0.5} sx={{ px: 0.5, pb: 0.5 }}>
+              {[
+                ['claro', t('themeLight')],
+                ['oscuro', t('themeDark')],
+                ['sistema', t('themeSystem')],
+              ].map(([value, label]) => (
+                <MenuItem
+                  key={value}
+                  selected={preferences.tema === value}
+                  onClick={() => updatePreference('tema', value)}
+                  sx={{
+                    flex: 1,
+                    minHeight: 34,
+                    justifyContent: 'center',
+                    borderRadius: 1,
+                    px: 0.5,
+                    fontSize: '0.7rem',
+                  }}
+                >
+                  {label}
+                </MenuItem>
+              ))}
+            </Stack>
+            {settingsError && (
+              <Alert severity="error" sx={{ mx: 0.5, mb: 0.5, py: 0 }}>
+                {settingsError}
+              </Alert>
+            )}
+            <Divider sx={{ my: 0.75 }} />
+            <MenuItem
+              onClick={() => {
+                setSettingsAnchor(null);
+                navigate(isDistributor ? '/distribuidor/configuracion' : isIsm ? '/ism/configuracion' : '/configuracion');
+              }}
+              sx={{ minHeight: 38, borderRadius: 1.25, fontSize: '0.78rem' }}
+            >
+              <ListItemIcon sx={{ minWidth: 30 }}><SettingsOutlined fontSize="small" /></ListItemIcon>
+              {t('settingsAdvanced')}
+            </MenuItem>
+          </Menu>
+
+          <Stack
+            direction="row"
+            spacing={1.25}
+            sx={{
+              alignItems: 'center',
+              justifyContent: { xs: 'center', md: 'flex-start' },
+            }}
+          >
             <Avatar
               sx={{
                 width: 36,
@@ -296,7 +455,7 @@ function DashboardLayout({ children }) {
               {inicial}
             </Avatar>
 
-            <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Box sx={{ minWidth: 0, flex: 1, display: { xs: 'none', md: 'block' } }}>
               <Typography
                 noWrap
                 sx={{ fontSize: '0.78rem', fontWeight: 600, color: '#F1F5F9' }}
@@ -307,7 +466,7 @@ function DashboardLayout({ children }) {
                 noWrap
                 sx={{ fontSize: '0.63rem', fontWeight: 500, color: '#7E96B4', mt: 0.25 }}
               >
-                {isDistributor ? t('userRoleDistributor') : t('userRoleAdmin')}
+                {isDistributor ? t('userRoleDistributor') : isIsm ? t('userRoleIsm') : t('userRoleAdmin')}
               </Typography>
             </Box>
 
@@ -338,7 +497,7 @@ function DashboardLayout({ children }) {
       </Paper>
 
       {/* CONTENIDO PRINCIPAL */}
-      <Box component="main" sx={{ flex: 1, p: { xs: 2, md: 3 }, overflowX: 'hidden' }}>
+      <Box className="dashboard-main" component="main" sx={{ flex: 1, minWidth: 0, p: { xs: 1.25, md: 2 }, overflowX: 'hidden' }}>
         {children}
       </Box>
     </Box>

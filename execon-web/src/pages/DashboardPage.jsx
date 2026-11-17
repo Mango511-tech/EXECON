@@ -839,7 +839,7 @@ function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <Box sx={{ width: '100%', pb: 3, zoom: 0.9 }}>
+      <Box sx={{ width: '100%', pb: 3 }}>
         {error && (
           <Alert
             severity="error"

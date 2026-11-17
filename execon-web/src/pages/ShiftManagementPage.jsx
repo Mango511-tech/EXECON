@@ -1260,8 +1260,8 @@ function ShiftMetricCard({ icon, label, value, subtitle, color, background }) {
       sx={{
         position: 'relative',
         p: 2.25,
-        bgcolor: background,
-        border: '1px solid transparent',
+        bgcolor: '#FFFFFF',
+        border: `1px solid ${T.border}`,
         borderRadius: 2.5,
         boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
         cursor: 'default',
@@ -1282,7 +1282,7 @@ function ShiftMetricCard({ icon, label, value, subtitle, color, background }) {
           display: 'grid',
           placeItems: 'center',
           borderRadius: 2,
-          bgcolor: '#FFFFFF',
+          bgcolor: background,
           color,
           '& svg': { fontSize: 20 },
         }}

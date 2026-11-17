@@ -83,6 +83,24 @@ const esFinalizado = (s) => {
 };
 const esPendiente = (s) => safeText(s).toLowerCase() === 'pendiente';
 
+const normalizeIncidentStatus = (status) => {
+  const normalized = safeText(status)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+  if (normalized === 'EN ATENCION' || normalized === 'ASIGNADO') return 'EN ATENCION';
+  if (normalized === 'FINALIZADO' || normalized === 'RESUELTO' || normalized === 'CERRADO') return 'FINALIZADO';
+  return 'PENDIENTE';
+};
+
+function getStoredUserId() {
+  try {
+    return JSON.parse(localStorage.getItem('execon_usuario') || 'null')?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 // Filtra que sea estrictamente ISM/MESA y no supervisor/admin/distribuidor
 const esIsmMesa = (u) => {
   if (!u) return false;
@@ -250,7 +268,7 @@ export default function OnsiteDistributionPage() {
     setCargando(true);
     try {
       const [resIncidentes, resTecnicos] = await Promise.allSettled([
-        api.get('/onsite'),
+        api.get('/incidentes'),
         api.get('/usuarios?rol=ISM/MESA'),
       ]);
 
@@ -317,9 +335,16 @@ export default function OnsiteDistributionPage() {
 
     setAsignando(true);
     try {
-      await api.post('/onsite/asignar', {
-        tecnicoId: agenteAsignar,
-        folio: folioAsignar.trim(),
+      const incidente = incidentes.find(
+        (item) => safeText(item.folio).toLowerCase() === folioAsignar.trim().toLowerCase(),
+      );
+      if (!incidente) {
+        setMensaje({ tipo: 'error', texto: 'No se encontró un incidente con ese folio.' });
+        return;
+      }
+      await api.put(`/incidentes/${incidente.id}`, {
+        idIsmAsignado: agenteAsignar,
+        estatus: 'EN ATENCION',
       });
       setMensaje({
         tipo: 'success',
@@ -352,10 +377,21 @@ export default function OnsiteDistributionPage() {
     setGuardandoForm(true);
     try {
       if (editandoId) {
-        await api.put(`/onsite/${editandoId}`, formulario);
+        await api.put(`/incidentes/${editandoId}`, {
+          ...formulario,
+          nombreSitio: formulario.ubicacion,
+          idIsmAsignado: formulario.tecnicoId || null,
+          estatus: normalizeIncidentStatus(formulario.estatus),
+        });
         setMensaje({ tipo: 'success', texto: 'Incidente actualizado correctamente.' });
       } else {
-        await api.post('/onsite', formulario);
+        await api.post('/incidentes', {
+          ...formulario,
+          nombreSitio: formulario.ubicacion,
+          idIsmAsignado: formulario.tecnicoId || null,
+          asignadoPor: getStoredUserId(),
+          estatus: normalizeIncidentStatus(formulario.estatus),
+        });
         setMensaje({ tipo: 'success', texto: 'Incidente registrado correctamente.' });
       }
       setModalFormulario(false);
@@ -386,7 +422,7 @@ export default function OnsiteDistributionPage() {
       resumen: item.resumen || item.titulo || '',
       descripcion: item.descripcion || '',
       ubicacion: item.ubicacion || '',
-      tecnicoId: item.tecnico_id || item.tecnicoId || '',
+      tecnicoId: item.idIsmMesa || item.tecnico_id || item.tecnicoId || '',
       estatus: item.estatus || 'Pendiente',
     });
     setModalFormulario(true);
@@ -401,7 +437,7 @@ export default function OnsiteDistributionPage() {
       `"${i?.folio || ''}"`,
       `"${safeText(i?.resumen || i?.titulo).replace(/"/g, '""')}"`,
       `"${i?.ubicacion || ''}"`,
-      `"${i?.tecnico_nombre || i?.tecnico || 'Sin asignar'}"`,
+      `"${i?.ismMesa || i?.tecnico_nombre || i?.tecnico || 'Sin asignar'}"`,
       `"${i?.estatus || ''}"`,
     ]);
 
@@ -469,7 +505,7 @@ export default function OnsiteDistributionPage() {
     );
   };
 
-  const nombreTecnico = (item) => safeText(item?.tecnico_nombre || item?.tecnico);
+  const nombreTecnico = (item) => safeText(item?.ismMesa || item?.tecnico_nombre || item?.tecnico);
 
   return (
     <DashboardLayout>

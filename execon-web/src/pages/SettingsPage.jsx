@@ -4,6 +4,8 @@ import { Alert, Box, Button, CircularProgress, FormControl, FormControlLabel,
   InputLabel, MenuItem, Paper, Radio, RadioGroup, Select, Stack, Switch,
   TextField, Typography } from '@mui/material';
 import DashboardLayout from '../layouts/DashboardLayout';
+import DistributorLayout from '../layouts/DistributorLayout';
+import IsmLayout from '../layouts/IsmLayout';
 import api from '../api/client';
 import { usePreferences } from '../context/PreferencesContext';
 
@@ -18,7 +20,7 @@ function errorText(error) {
 }
 const cardSx = { p: { xs: 2, md: 3 }, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 };
 
-export default function SettingsPage() {
+export default function SettingsPage({ layout = 'supervisor' }) {
   const [params, setParams] = useSearchParams();
   const requested = params.get('seccion');
   const section = SECTIONS.includes(requested) ? requested : 'cuenta';
@@ -101,7 +103,13 @@ export default function SettingsPage() {
     finally { setBusy(false); }
   }
   const prefsDisabled = loading || Boolean(error) || busy;
-  return <DashboardLayout title={text('Configuración', 'Settings')}>
+  const PageLayout = layout === 'distributor'
+    ? DistributorLayout
+    : layout === 'ism'
+      ? IsmLayout
+      : DashboardLayout;
+
+  return <PageLayout>
     <Stack spacing={2}>
       <Typography component="h1" variant="h5">{text('Configuración', 'Settings')}</Typography>
       {message && <Alert severity={message.severity} onClose={() => setMessage(null)}>{message.text}</Alert>}
@@ -135,14 +143,12 @@ export default function SettingsPage() {
                   {[['claro',text('Claro','Light')],['oscuro',text('Oscuro','Dark')],['sistema',text('Sistema','System')]].map(([value,label]) =>
                     <FormControlLabel key={value} value={value} label={label} disabled={prefsDisabled} control={<Radio />} />)}
                 </RadioGroup>
-                <Alert severity="info">{text('Se aplica al guardar. Las pantallas con colores fijos aún requieren adaptación al tema.', 'Applied on save. Screens with fixed colors still require theme adaptation.')}</Alert>
               </>}
               {section === 'idioma' && <>
                 <FormControl fullWidth disabled={prefsDisabled}><InputLabel id="settings-language">{text('Idioma','Language')}</InputLabel>
                   <Select labelId="settings-language" label={text('Idioma','Language')} value={draft.idioma} onChange={(event) => change('idioma',event.target.value)}>
                     <MenuItem value="es-MX">Español (México)</MenuItem><MenuItem value="en-US">English (United States)</MenuItem>
                   </Select></FormControl>
-                <Alert severity="info">{text('Esta entrega traduce Configuración y los textos estándar de Material UI. Las demás pantallas aún no tienen traducciones.', 'This update translates Settings and standard Material UI messages. Other screens are not translated yet.')}</Alert>
               </>}
               {section === 'preferencias' && <>
                 {[
@@ -155,7 +161,6 @@ export default function SettingsPage() {
                   <Select labelId="settings-rows" label={text('Registros por página','Rows per page')} value={draft.registrosPorPagina} onChange={(event) => change('registrosPorPagina', Number(event.target.value))}>
                     {[10,20,50].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
                   </Select></FormControl>
-                <Alert severity="warning">{text('La paginación se aplica en Gestión de Usuarios. Notificaciones, recordatorios y confirmación de salida se guardan, pero sus componentes aún deben conectarse.', 'Pagination applies to User Management. Notifications, reminders and sign-out confirmation are saved, but their components still need integration.')}</Alert>
               </>}
               <Button variant="contained" type="submit" disabled={prefsDisabled}>{busy ? text('Guardando…','Saving…') : text('Guardar preferencias','Save preferences')}</Button>
             </Stack>}
@@ -172,5 +177,5 @@ export default function SettingsPage() {
         </Paper>
       </Box>
     </Stack>
-  </DashboardLayout>;
+  </PageLayout>;
 }
