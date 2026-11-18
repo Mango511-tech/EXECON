@@ -37,6 +37,7 @@ import {
 } from '@mui/material';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import usePolling from '../../hooks/usePolling';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import DistribuidorLayout from '../../layouts/DistributorLayout';
@@ -203,27 +204,27 @@ function DistributorOverviewPage() {
   const writeLock = useRef(false);
   const assignmentFormRef = useRef(null);
 
-  const loadEngineers = useCallback(async () => {
-    setLoadingEngineers(true);
+  const loadEngineers = useCallback(async (silent = false) => {
+    if (!silent) setLoadingEngineers(true);
     try {
       const result = await apiRequest('/ingenieros');
       setEngineers(Array.isArray(result.data) ? result.data : []);
     } catch {
-      setEngineers([]);
+      if (!silent) setEngineers([]);
     } finally {
-      setLoadingEngineers(false);
+      if (!silent) setLoadingEngineers(false);
     }
   }, []);
 
-  const loadIncidents = useCallback(async () => {
-    setLoadingIncidents(true);
+  const loadIncidents = useCallback(async (silent = false) => {
+    if (!silent) setLoadingIncidents(true);
     try {
       const result = await apiRequest('/incidentes');
       setIncidents(Array.isArray(result.data) ? result.data : []);
     } catch {
-      setIncidents([]);
+      if (!silent) setIncidents([]);
     } finally {
-      setLoadingIncidents(false);
+      if (!silent) setLoadingIncidents(false);
     }
   }, []);
 
@@ -231,6 +232,15 @@ function DistributorOverviewPage() {
     loadEngineers();
     loadIncidents();
   }, [loadEngineers, loadIncidents]);
+
+  // Refresco automático: estatus de ISM e incidentes cambian desde otros navegadores
+  usePolling(
+    useCallback(() => {
+      loadEngineers(true);
+      loadIncidents(true);
+    }, [loadEngineers, loadIncidents]),
+    8000,
+  );
 
   const availableEngineers = useMemo(
     () => engineers.filter((eng) => normalizeText(eng.estatus) === 'mesa' || !eng.estatus),

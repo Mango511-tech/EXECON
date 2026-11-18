@@ -36,6 +36,7 @@ import {
 } from '@mui/material';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import usePolling from '../../hooks/usePolling';
 import IsmLayout from '../../layouts/IsmLayout';
 import { usePreferences } from '../../context/PreferencesContext';
 import StatusSummaryCards from '../../components/StatusSummaryCards';
@@ -124,8 +125,8 @@ export default function IsmMesaDashboardPage() {
     return () => clearInterval(interval);
   }, [shiftState]);
 
-  const loadIncidents = useCallback(async () => {
-    setLoading(true);
+  const loadIncidents = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const token = localStorage.getItem('execon_token');
       const response = await fetch(`${API_URL}/incidentes`, {
@@ -138,15 +139,60 @@ export default function IsmMesaDashboardPage() {
       }
       setIncidents(result.data);
     } catch (error) {
-      setMessage({ severity: 'error', text: error.message || tx('No fue posible cargar los incidentes.', 'Could not load incidents.') });
+      if (!silent) setMessage({ severity: 'error', text: error.message || tx('No fue posible cargar los incidentes.', 'Could not load incidents.') });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [tx]);
 
   useEffect(() => {
     loadIncidents();
   }, [loadIncidents]);
+
+  // Lee mi estatus guardado en la base de datos (sobrevive a recargas y otros navegadores)
+  const loadOwnStatus = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const token = localStorage.getItem('execon_token');
+      const response = await fetch(`${API_URL}/ingenieros`, { headers: { Authorization: `Bearer ${token}` } });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(result.data)) return;
+      const me = result.data.find((e) => Number(e.id) === Number(userId));
+      const saved = String(me?.estatus || '').toLowerCase();
+      const startKey = `execon_jornada_inicio_${userId}`;
+      if (saved === 'mesa' || saved === 'campo' || saved === 'comida') {
+        setShiftState((prev) => {
+          const next = saved === 'comida' ? 'COMIDA' : 'ACTIVO';
+          return prev === next ? prev : next;
+        });
+        let start = Number(localStorage.getItem(startKey));
+        if (!start) {
+          start = me?.actualizadoEn ? new Date(me.actualizadoEn).getTime() : Date.now();
+          localStorage.setItem(startKey, String(start));
+        }
+        setShiftStartTime((prev) => prev || new Date(start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - start) / 1000)));
+      } else {
+        setShiftState('INACTIVO');
+        localStorage.removeItem(startKey);
+      }
+    } catch {
+      /* sin conexión: se conserva el estado local */
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    loadOwnStatus();
+  }, [loadOwnStatus]);
+
+  // Refresco automático: nuevas asignaciones del distribuidor y estatus propio
+  usePolling(
+    useCallback(() => {
+      loadIncidents(true);
+      loadOwnStatus();
+    }, [loadIncidents, loadOwnStatus]),
+    8000,
+  );
 
   const myIncidents = useMemo(() => {
     return incidents.filter(
@@ -186,6 +232,8 @@ export default function IsmMesaDashboardPage() {
       setMessage({ severity: 'error', text: error.message });
       return;
     }
+    localStorage.setItem(`execon_jornada_inicio_${userId}`, String(now.getTime()));
+    setElapsedSeconds(0);
     setShiftStartTime(timeStr);
     setShiftState('ACTIVO');
     setMessage({ severity: 'success', text: tx(`Jornada iniciada a las ${timeStr}. Estado: Disponible en mesa.`, `Shift started at ${timeStr}. Status: Available at desk.`) });
@@ -210,8 +258,15 @@ export default function IsmMesaDashboardPage() {
     });
   };
 
-  const handleEndShift = () => {
+  const handleEndShift = async () => {
     if (window.confirm(tx('¿Confirmas que deseas finalizar tu turno de 9 horas?', 'Are you sure you want to end your 9-hour shift?'))) {
+      try {
+        await updateActivityStatus(userId, 'sin_reportar', tx('No se pudo registrar el fin de la jornada.', 'Could not record the end of your shift.'));
+      } catch (error) {
+        setMessage({ severity: 'error', text: error.message });
+        return;
+      }
+      localStorage.removeItem(`execon_jornada_inicio_${userId}`);
       setShiftState('INACTIVO');
       setMessage({ severity: 'warning', text: tx('Turno finalizado con éxito.', 'Shift ended successfully.') });
     }
@@ -228,11 +283,11 @@ export default function IsmMesaDashboardPage() {
     if (!selectedIncident) return;
     setSubmittingStatus(true);
     const endTime = new Date();
-    const endTimeStr = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const endTimeStr = endTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
 
     try {
       const token = localStorage.getItem('execon_token');
-      await fetch(`${API_URL}/incidentes/${selectedIncident.id}`, {
+      const putResponse = await fetch(`${API_URL}/incidentes/${selectedIncident.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -242,6 +297,10 @@ export default function IsmMesaDashboardPage() {
           descripcion: feedbackText ? `${selectedIncident.descripcion || selectedIncident.resumen}\n[Retroalimentación]: ${feedbackText}` : selectedIncident.descripcion,
         }),
       });
+      const putResult = await putResponse.json().catch(() => ({}));
+      if (!putResponse.ok) {
+        throw new Error(putResult.message || tx('No se pudo actualizar el incidente.', 'Could not update the incident.'));
+      }
 
       if (newStatus === 'FINALIZADO') {
         const newLog = {
@@ -256,12 +315,8 @@ export default function IsmMesaDashboardPage() {
         };
         setActivityLogs((prev) => [newLog, ...prev]);
 
-        // Regresar a mesa
-        await fetch(`${API_URL}/usuarios/${userId}/estatus-actividad`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ estatus: 'mesa' }),
-        }).catch(() => {});
+        // El backend ya regresa al ISM a "mesa" al finalizar; aquí solo se refleja en pantalla
+        setShiftState((prev) => (prev === 'INACTIVO' ? 'ACTIVO' : prev));
       }
 
       setMessage({
@@ -274,8 +329,8 @@ export default function IsmMesaDashboardPage() {
 
       setSelectedIncident(null);
       loadIncidents();
-    } catch {
-      setMessage({ severity: 'error', text: tx('No se pudo actualizar el incidente.', 'Could not update the incident.') });
+    } catch (error) {
+      setMessage({ severity: 'error', text: error.message || tx('No se pudo actualizar el incidente.', 'Could not update the incident.') });
     } finally {
       setSubmittingStatus(false);
     }

@@ -44,6 +44,7 @@ import {
 } from '@mui/material';
 
 import { useEffect, useMemo, useState } from 'react';
+import usePolling from '../hooks/usePolling';
 import api from '../api/client';
 import DashboardLayout from '../layouts/DashboardLayout';
 
@@ -65,7 +66,7 @@ const safeText = (val) => (val === null || val === undefined ? '' : String(val).
 // Extrae el nombre real del usuario según las columnas posibles del backend
 const getNombreUsuario = (u) => {
   if (!u) return '';
-  return safeText(u.nombre_completo || u.nombre || u.usuario || u.username || u.name);
+  return safeText(u.nombreCompleto || u.nombre_completo || u.nombre || u.usuario || u.username || u.name);
 };
 
 const getInit = (val) => {
@@ -264,8 +265,8 @@ export default function OnsiteDistributionPage() {
   const [mensaje, setMensaje] = useState(null);
 
   // Carga de datos
-  const cargarDatos = async () => {
-    setCargando(true);
+  const cargarDatos = async (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     try {
       const [resIncidentes, resTecnicos] = await Promise.allSettled([
         api.get('/incidentes'),
@@ -275,27 +276,32 @@ export default function OnsiteDistributionPage() {
       if (resIncidentes.status === 'fulfilled') {
         const datos = resIncidentes.value.data?.data || resIncidentes.value.data || [];
         setIncidentes(Array.isArray(datos) ? datos : []);
-      } else {
+      } else if (!silencioso) {
         setIncidentes([]);
       }
 
       if (resTecnicos.status === 'fulfilled') {
         const datos = resTecnicos.value.data?.data || resTecnicos.value.data || [];
         setTecnicos(Array.isArray(datos) ? datos : []);
-      } else {
+      } else if (!silencioso) {
         setTecnicos([]);
       }
     } catch {
-      setIncidentes([]);
-      setTecnicos([]);
+      if (!silencioso) {
+        setIncidentes([]);
+        setTecnicos([]);
+      }
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
   };
 
   useEffect(() => {
     cargarDatos();
   }, []);
+
+  // Refresco automático para ver cambios hechos por otros usuarios
+  usePolling(cargarDatos, 8000);
 
   // Lista depurada: solo usuarios reales con nombre, rol ISM/MESA y en estatus mesa
   const tecnicosIsmDisponibles = useMemo(() => {

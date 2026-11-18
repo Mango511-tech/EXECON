@@ -29,6 +29,7 @@ import {
 import { DataGrid } from '@mui/x-data-grid';
 import ReactECharts from 'echarts-for-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import usePolling from '../hooks/usePolling';
 
 import DashboardLayout from '../layouts/DashboardLayout';
 import { dashboardService } from '../services/dashboardService';
@@ -499,9 +500,11 @@ function DashboardPage() {
     }
   }, []);
 
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const loadDashboard = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
 
     const siteId = selectedSite === 'todos' ? undefined : selectedSite;
 
@@ -536,13 +539,14 @@ function DashboardPage() {
         volumetria: Array.isArray(volumetria) ? volumetria : [],
       });
     } catch (requestError) {
+      if (silent) return;
       setDashboardData(getInitialDashboardData());
       setError(
         requestError.message ||
           'No fue posible cargar la información del dashboard.',
       );
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [period, selectedSite, weekRange]);
 
@@ -553,6 +557,9 @@ function DashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  // Refresco automático del tablero (estatus del personal en tiempo casi real)
+  usePolling(loadDashboard, 10000);
 
   const handleCardClick = (cardId) => {
     setSelectedStatus((prev) => (prev === cardId ? null : cardId));
