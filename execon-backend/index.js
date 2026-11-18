@@ -28,9 +28,18 @@ const ROLES_PERMITIDOS = [
    MIDDLEWARE
    ========================================================= */
 
+// Orígenes permitidos: FRONTEND_URL (puede ser una lista separada por comas) + localhost para desarrollo
+const origenesPermitidos = [
+  'http://localhost:5173',
+  ...String(process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((url) => url.trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+];
+
 app.use(
   cors({
-    origin: 'http://localhost:5173',
+    origin: origenesPermitidos,
   }),
 );
 

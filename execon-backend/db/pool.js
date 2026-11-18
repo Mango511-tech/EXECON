@@ -8,6 +8,8 @@ const pool = new Pool({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT || 5432),
   database: process.env.DB_NAME,
+  // En servicios en la nube (Neon, Supabase...) hay que activar SSL con DB_SSL=true
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 });
 
 pool
