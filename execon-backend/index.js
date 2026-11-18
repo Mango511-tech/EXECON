@@ -6,6 +6,9 @@ const bcrypt = require('bcrypt');
 const ExcelJS = require('exceljs');
 
 const pool = require('./db/pool');
+const { setEstatusJornada } = require('./db/jornada');
+const verificarToken = require('./middleware/auth');
+const { permitirRoles } = require('./middleware/auth');
 
 const authRoutes = require('./routes/auth.routes');
 const turnosRoutes = require('./routes/turnos.routes');
@@ -375,34 +378,34 @@ app.patch('/api/usuarios/:id/estatus', async (request, response) => {
 });
 
 // ACTUALIZAR ESTATUS DE ACTIVIDAD DEL INGENIERO (mesa, comida, campo, etc.)
-app.patch('/api/usuarios/:id/estatus-actividad', async (request, response) => {
-  try {
-    const userId = Number(request.params.id);
-    const { estatus } = request.body;
+app.patch(
+  '/api/usuarios/:id/estatus-actividad',
+  verificarToken,
+  permitirRoles('admin', 'supervisor', 'distribuidor', 'ISM/MESA'),
+  async (request, response) => {
+    try {
+      const userId = Number(request.params.id);
+      const { estatus } = request.body || {};
 
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return response.status(400).json({ message: 'Identificador de usuario inválido.' });
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return response.status(400).json({ success: false, message: 'Identificador de usuario inválido.' });
+      }
+      // Un ISM/MESA solo puede cambiar su propio estatus
+      if (request.usuario.rol === 'ISM/MESA' && request.usuario.id !== userId) {
+        return response.status(403).json({ success: false, message: 'Solo puedes cambiar tu propio estatus.' });
+      }
+
+      const guardado = await setEstatusJornada(userId, estatus);
+      response.json({ success: true, estatus: guardado, message: `Estatus de actividad actualizado a ${guardado}` });
+    } catch (error) {
+      if (error.status === 400) {
+        return response.status(400).json({ success: false, message: error.message });
+      }
+      console.error('Error al actualizar estatus de actividad:', error);
+      response.status(500).json({ success: false, message: 'Error interno al actualizar estatus.' });
     }
-
-    const estatusLimpio = String(estatus || 'mesa').trim().toLowerCase();
-
-    // Actualiza en la tabla de métricas/estatus si existe
-    await pool.query(
-      `
-        INSERT INTO public.metricas_ingenieros (id_ingeniero, estatus, actualizado_en)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (id_ingeniero)
-        DO UPDATE SET estatus = $2, actualizado_en = NOW()
-      `,
-      [userId, estatusLimpio]
-    ).catch(() => {});
-
-    response.json({ success: true, message: `Estatus de actividad actualizado a ${estatusLimpio}` });
-  } catch (error) {
-    console.error('Error al actualizar estatus de actividad:', error);
-    response.status(500).json({ success: false, message: 'Error interno al actualizar estatus.' });
   }
-});
+);
 
 // ELIMINAR USUARIO DEFINITIVAMENTE
 app.delete('/api/usuarios/:id', async (request, response) => {

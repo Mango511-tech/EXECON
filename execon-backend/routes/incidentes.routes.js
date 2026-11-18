@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db/pool');
 const verificarToken = require('../middleware/auth');
 const { permitirRoles } = require('../middleware/auth');
+const { setEstatusJornada } = require('../db/jornada');
 
 const router = express.Router();
 router.use(verificarToken);
@@ -285,6 +286,18 @@ router.put('/:id', permitirRoles('admin', 'supervisor', 'distribuidor', 'ISM/MES
 
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: 'Incidente no encontrado.' });
+    }
+
+    // Mantiene sincronizado el estatus del ISM (lo ven supervisor y distribuidor)
+    try {
+      const fila = result.rows[0];
+      if (estatusLimpio === 'EN ATENCION' && fila.id_ism_asignado) {
+        await setEstatusJornada(fila.id_ism_asignado, 'campo');
+      } else if (estatusLimpio === 'FINALIZADO' && isIsm) {
+        await setEstatusJornada(req.usuario.id, 'mesa');
+      }
+    } catch (syncError) {
+      console.error('No se pudo sincronizar el estatus del ISM:', syncError);
     }
 
     return res.json({ success: true, message: 'Incidente actualizado correctamente.', data: result.rows[0] });
