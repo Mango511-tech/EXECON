@@ -13,6 +13,7 @@ const { permitirRoles } = require('./middleware/auth');
 const authRoutes = require('./routes/auth.routes');
 const turnosRoutes = require('./routes/turnos.routes');
 const incidentesRoutes = require('./routes/incidentes.routes');
+const jornadaRoutes = require('./routes/jornada.routes');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -52,6 +53,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/turnos', turnosRoutes);
 app.use('/api/incidentes', incidentesRoutes);
+app.use('/api/jornada', jornadaRoutes);
 
 /* =========================================================
    FUNCIONES AUXILIARES
