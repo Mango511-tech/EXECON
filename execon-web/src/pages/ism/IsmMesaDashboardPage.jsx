@@ -1,16 +1,11 @@
 import {
   AccessTimeOutlined,
-  BusinessCenterOutlined,
   EmailOutlined,
   GroupsOutlined,
   LocationOnOutlined,
   PhoneOutlined,
-  PlayArrowOutlined,
   RestaurantOutlined,
   ScheduleOutlined,
-  StopOutlined,
-  WarningAmberOutlined,
-  WbSunnyOutlined,
 } from '@mui/icons-material';
 
 import {
@@ -22,6 +17,8 @@ import {
   CardContent,
   Chip,
   Dialog,
+  MenuItem,
+  Select,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -46,6 +43,30 @@ const API_URL = (
 ).replace(/\/+$/, '');
 
 const JORNADA_MINUTOS = 9 * 60;
+
+// Opciones del selector de estatus del ISM (el backend las agrupa en mesa / campo / comida / proyecto / sin reportar)
+const ACTIVIDADES = [
+  'Offline',
+  'Available',
+  'Lunch',
+  'Break',
+  'Asistencia en campo',
+  'Atención Grupos de Whatsapp',
+  'Atención Correo',
+  'Atendiendo Backlog',
+  'Capacitación - Reunión',
+  'Idle',
+  'Outbound Calls',
+];
+
+const ACTIVIDAD_POR_ESTATUS = {
+  mesa: 'Available',
+  campo: 'Asistencia en campo',
+  comida: 'Lunch',
+  proyecto: 'Capacitación - Reunión',
+  sin_reportar: 'Offline',
+  vacaciones: 'Offline',
+};
 
 async function updateActivityStatus(userId, status, failureMessage) {
   const token = localStorage.getItem('execon_token');
@@ -99,7 +120,9 @@ export default function IsmMesaDashboardPage() {
 
   // Estados de Jornada y Turno
   const [shiftState, setShiftState] = useState('INACTIVO'); // 'ACTIVO', 'COMIDA', 'INACTIVO'
-  const [shiftStartTime, setShiftStartTime] = useState(null);
+  const [shiftStartMs, setShiftStartMs] = useState(null);
+  const [actividad, setActividad] = useState('Offline');
+  const [dbStatus, setDbStatus] = useState('sin_reportar');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Estados de Incidentes
@@ -114,16 +137,15 @@ export default function IsmMesaDashboardPage() {
   const [feedbackText, setFeedbackText] = useState('');
   const [submittingStatus, setSubmittingStatus] = useState(false);
 
-  // Contador de Jornada
+  // Contador de jornada: se calcula siempre desde la hora de entrada guardada en la base de datos,
+  // por eso no se reinicia si se refresca la página o se abre en otro navegador.
   useEffect(() => {
-    let interval = null;
-    if (shiftState === 'ACTIVO' || shiftState === 'COMIDA') {
-      interval = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
-    }
+    if (!shiftStartMs || shiftState === 'INACTIVO') return undefined;
+    const tick = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - shiftStartMs) / 1000)));
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [shiftState]);
+  }, [shiftState, shiftStartMs]);
 
   const loadIncidents = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -149,32 +171,24 @@ export default function IsmMesaDashboardPage() {
     loadIncidents();
   }, [loadIncidents]);
 
-  // Lee mi estatus guardado en la base de datos (sobrevive a recargas y otros navegadores)
+  // Lee mi estatus y mi hora de entrada guardados en la base de datos (sobreviven a recargas y otros navegadores)
   const loadOwnStatus = useCallback(async () => {
     if (!userId) return;
     try {
       const token = localStorage.getItem('execon_token');
-      const response = await fetch(`${API_URL}/ingenieros`, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`${API_URL}/jornada/mia`, { headers: { Authorization: `Bearer ${token}` } });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok || !Array.isArray(result.data)) return;
-      const me = result.data.find((e) => Number(e.id) === Number(userId));
-      const saved = String(me?.estatus || '').toLowerCase();
-      const startKey = `execon_jornada_inicio_${userId}`;
-      if (saved === 'mesa' || saved === 'campo' || saved === 'comida') {
-        setShiftState((prev) => {
-          const next = saved === 'comida' ? 'COMIDA' : 'ACTIVO';
-          return prev === next ? prev : next;
-        });
-        let start = Number(localStorage.getItem(startKey));
-        if (!start) {
-          start = me?.actualizadoEn ? new Date(me.actualizadoEn).getTime() : Date.now();
-          localStorage.setItem(startKey, String(start));
-        }
-        setShiftStartTime((prev) => prev || new Date(start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - start) / 1000)));
-      } else {
+      if (!response.ok || !result.data) return;
+      const { estatus, etiqueta, entradaMs } = result.data;
+      setDbStatus(estatus);
+      setActividad(ACTIVIDADES.includes(etiqueta) ? etiqueta : ACTIVIDAD_POR_ESTATUS[estatus] || 'Offline');
+      if (estatus === 'sin_reportar' || estatus === 'vacaciones') {
         setShiftState('INACTIVO');
-        localStorage.removeItem(startKey);
+        setShiftStartMs(null);
+        setElapsedSeconds(0);
+      } else {
+        setShiftState(estatus === 'comida' ? 'COMIDA' : 'ACTIVO');
+        setShiftStartMs(entradaMs || Date.now());
       }
     } catch {
       /* sin conexión: se conserva el estado local */
@@ -208,67 +222,38 @@ export default function IsmMesaDashboardPage() {
 
   const ownState = currentOnsite
     ? 'campo'
-    : shiftState === 'ACTIVO'
-      ? 'mesa'
-      : shiftState === 'COMIDA'
+    : dbStatus === 'campo'
+      ? 'campo'
+      : dbStatus === 'comida'
         ? 'comida'
-        : 'sinReportar';
+        : dbStatus === 'mesa' || dbStatus === 'proyecto'
+          ? 'mesa'
+          : 'sinReportar';
   const statusCards = [
     { id: 'mesa', label: t('statusMesa'), value: ownState === 'mesa' ? 1 : 0, color: '#1D6FB8', lightColor: '#EAF2FA', icon: <GroupsOutlined /> },
     { id: 'campo', label: t('statusCampo'), value: ownState === 'campo' ? 1 : 0, color: '#0E9F6E', lightColor: '#E9F9F1', icon: <LocationOnOutlined /> },
     { id: 'comida', label: t('statusComida'), value: ownState === 'comida' ? 1 : 0, color: '#D97706', lightColor: '#FDF3E3', icon: <RestaurantOutlined /> },
-    { id: 'proyecto', label: t('statusProyecto'), value: 0, color: '#6D5BB8', lightColor: '#EFEDFA', icon: <BusinessCenterOutlined /> },
-    { id: 'sin-reportar', label: t('statusSinReportar'), value: ownState === 'sinReportar' ? 1 : 0, color: '#C0392B', lightColor: '#FDECEA', icon: <WarningAmberOutlined /> },
-    { id: 'vacaciones', label: t('statusVacaciones'), value: 0, color: '#64748B', lightColor: '#EEF2F6', icon: <WbSunnyOutlined /> },
   ];
 
-  // Turno Handlers
-  const handleStartShift = async () => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    try {
-      await updateActivityStatus(userId, 'mesa', tx('No se encontró una sesión válida para actualizar el estado.', 'A valid session is required to update your status.'));
-    } catch (error) {
-      setMessage({ severity: 'error', text: error.message });
+  // Cambio de estatus desde el selector
+  const handleChangeActividad = async (nextActividad) => {
+    if (currentOnsite) {
+      setMessage({ severity: 'warning', text: tx('Concluye tu onsite en curso antes de cambiar de estatus.', 'Complete your onsite before changing status.') });
       return;
     }
-    localStorage.setItem(`execon_jornada_inicio_${userId}`, String(now.getTime()));
-    setElapsedSeconds(0);
-    setShiftStartTime(timeStr);
-    setShiftState('ACTIVO');
-    setMessage({ severity: 'success', text: tx(`Jornada iniciada a las ${timeStr}. Estado: Disponible en mesa.`, `Shift started at ${timeStr}. Status: Available at desk.`) });
-  };
-
-  const handleToggleMeal = async () => {
-    const nextState = shiftState === 'ACTIVO' ? 'COMIDA' : 'ACTIVO';
+    const previous = actividad;
+    setActividad(nextActividad);
     try {
       await updateActivityStatus(
         userId,
-        nextState === 'COMIDA' ? 'comida' : 'mesa',
+        nextActividad,
         tx('No se encontró una sesión válida para actualizar el estado.', 'A valid session is required to update your status.'),
       );
+      await loadOwnStatus();
+      setMessage({ severity: 'info', text: tx(`Estatus actualizado: ${nextActividad}`, `Status updated: ${nextActividad}`) });
     } catch (error) {
+      setActividad(previous);
       setMessage({ severity: 'error', text: error.message });
-      return;
-    }
-    setShiftState(nextState);
-    setMessage({
-      severity: 'info',
-      text: nextState === 'COMIDA' ? tx('Pausa registrada: En hora de comida.', 'Break started: At lunch.') : tx('Reanudado: Disponible en mesa.', 'Resumed: Available at desk.'),
-    });
-  };
-
-  const handleEndShift = async () => {
-    if (window.confirm(tx('¿Confirmas que deseas finalizar tu turno de 9 horas?', 'Are you sure you want to end your 9-hour shift?'))) {
-      try {
-        await updateActivityStatus(userId, 'sin_reportar', tx('No se pudo registrar el fin de la jornada.', 'Could not record the end of your shift.'));
-      } catch (error) {
-        setMessage({ severity: 'error', text: error.message });
-        return;
-      }
-      localStorage.removeItem(`execon_jornada_inicio_${userId}`);
-      setShiftState('INACTIVO');
-      setMessage({ severity: 'warning', text: tx('Turno finalizado con éxito.', 'Shift ended successfully.') });
     }
   };
 
@@ -338,13 +323,12 @@ export default function IsmMesaDashboardPage() {
 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   const progressPercent = Math.min(100, Math.round((elapsedMinutes / JORNADA_MINUTOS) * 100));
-  const shiftStatusLabel = ownState === 'mesa'
-    ? tx('En mesa (Disponible)', 'At desk (Available)')
-    : ownState === 'campo'
-      ? tx('En campo', 'In field')
-      : ownState === 'comida'
-        ? tx('En comida', 'At lunch')
-        : tx('Fuera de turno', 'Off shift');
+  const shiftStatusLabel = shiftState === 'INACTIVO'
+    ? tx('Fuera de turno', 'Off shift')
+    : actividad;
+  const shiftStartTime = shiftStartMs
+    ? new Date(shiftStartMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
     <IsmLayout>
@@ -421,46 +405,21 @@ export default function IsmMesaDashboardPage() {
               </Box>
             </Stack>
 
-            <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
-              {shiftState === 'INACTIVO' ? (
-                <Button
-                  size="small"
-                  variant="contained"
-                  startIcon={<PlayArrowOutlined />}
-                  onClick={handleStartShift}
-                  sx={{ bgcolor: '#003359', fontWeight: 800, textTransform: 'none', px: 1.5 }}
-                >
-                  {tx('Iniciar jornada', 'Start shift')}
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<RestaurantOutlined />}
-                    onClick={handleToggleMeal}
-                    sx={{
-                      fontWeight: 700,
-                      textTransform: 'none',
-                      borderColor: shiftState === 'COMIDA' ? '#0F9D58' : '#F29900',
-                      color: shiftState === 'COMIDA' ? '#0F9D58' : '#B76B00',
-                    }}
-                  >
-                    {shiftState === 'COMIDA' ? tx('Reanudar', 'Resume') : tx('Pausa comida', 'Meal break')}
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="text"
-                    color="error"
-                    startIcon={<StopOutlined />}
-                    onClick={handleEndShift}
-                    sx={{ fontWeight: 700, textTransform: 'none' }}
-                  >
-                    {tx('Finalizar', 'End shift')}
-                  </Button>
-                </>
-              )}
-            </Stack>
+            <Select
+              size="small"
+              value={actividad}
+              disabled={Boolean(currentOnsite)}
+              onChange={(event) => handleChangeActividad(event.target.value)}
+              inputProps={{ 'aria-label': tx('Estatus', 'Status') }}
+              MenuProps={{ PaperProps: { sx: { maxHeight: 420 } } }}
+              sx={{ minWidth: { xs: '100%', sm: 270 }, fontSize: '0.85rem', fontWeight: 700, color: '#003359', bgcolor: '#fff' }}
+            >
+              {ACTIVIDADES.map((option) => (
+                <MenuItem key={option} value={option} sx={{ fontSize: '0.85rem' }}>
+                  {option}
+                </MenuItem>
+              ))}
+            </Select>
           </Stack>
         </Paper>
 

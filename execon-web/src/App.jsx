@@ -12,6 +12,7 @@ import PlanningPage from './pages/PlanningPage';
 import SettingsPage from './pages/SettingsPage';
 import ShiftManagementPage from './pages/ShiftManagementPage';
 import UserManagementPage from './pages/UserManagementPage';
+import WorkHoursPage from './pages/WorkHoursPage';
 
 import DistributorOverviewPage from './pages/distribuidor/DistributorOverviewPage';
 
@@ -196,6 +197,15 @@ function App() {
         element={
           <RutaProtegida rolesPermitidos={ROLES_SUPERVISOR}>
             <OnsiteDistributionPage />
+          </RutaProtegida>
+        }
+      />
+
+      <Route
+        path="/horas-jornada"
+        element={
+          <RutaProtegida rolesPermitidos={ROLES_SUPERVISOR}>
+            <WorkHoursPage />
           </RutaProtegida>
         }
       />

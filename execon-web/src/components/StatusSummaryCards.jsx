@@ -10,7 +10,7 @@ export default function StatusSummaryCards({ cards }) {
         gridTemplateColumns: {
           xs: 'repeat(2, minmax(0, 1fr))',
           md: 'repeat(3, minmax(0, 1fr))',
-          lg: 'repeat(6, minmax(0, 1fr))',
+          lg: `repeat(${cards.length}, minmax(0, 1fr))`,
         },
         gap: 1.25,
         mb: 1.75,

@@ -1,4 +1,5 @@
 import {
+  AccessTimeOutlined,
   AssignmentOutlined,
   CalendarMonthOutlined,
   CheckOutlined,
@@ -191,6 +192,7 @@ function DashboardLayout({ children, variant = 'supervisor' }) {
           items: [
             { text: t('navPlanning'), icon: <CalendarMonthOutlined />, path: '/planeacion' },
             { text: t('navShifts'), icon: <QueryBuilderOutlined />, path: '/turnos' },
+            { text: t('navHours'), icon: <AccessTimeOutlined />, path: '/horas-jornada' },
           ],
         },
         {
