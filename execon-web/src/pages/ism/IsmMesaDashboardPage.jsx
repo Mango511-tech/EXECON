@@ -1,60 +1,51 @@
 import {
-  CheckCircleOutlined,
-  HistoryOutlined,
+  AccessTimeOutlined,
+  BusinessCenterOutlined,
+  EmailOutlined,
+  GroupsOutlined,
   LocationOnOutlined,
-  NotificationsActiveOutlined,
+  PhoneOutlined,
   PlayArrowOutlined,
   RestaurantOutlined,
+  ScheduleOutlined,
   StopOutlined,
-  TimerOutlined,
-  WorkOutlineOutlined,
+  WarningAmberOutlined,
+  WbSunnyOutlined,
 } from '@mui/icons-material';
+
 import {
   Alert,
+  Avatar,
   Box,
   Button,
+  Card,
+  CardContent,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  CircularProgress,
   LinearProgress,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import usePolling from '../../hooks/usePolling';
 import IsmLayout from '../../layouts/IsmLayout';
 import { usePreferences } from '../../context/PreferencesContext';
+import StatusSummaryCards from '../../components/StatusSummaryCards';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/+$/, '');
-const JORNADA_MIN = 9 * 60;
+const API_URL = (
+  import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+).replace(/\/+$/, '');
 
-const PRIORITY = {
-  P1: { color: '#B91C1C', bg: '#FDECEA', es: 'Crítica', en: 'Critical' },
-  P2: { color: '#C2410C', bg: '#FFF1E6', es: 'Alta', en: 'High' },
-  P3: { color: '#B45309', bg: '#FEF6E0', es: 'Media', en: 'Medium' },
-  P4: { color: '#1D6FB8', bg: '#EAF2FA', es: 'Baja', en: 'Low' },
-  P5: { color: '#64748B', bg: '#EEF2F6', es: 'Mínima', en: 'Minimal' },
-};
-
-const STATE_UI = {
-  mesa: { es: 'En mesa · Disponible', en: 'At desk · Available', color: '#1D6FB8', bg: '#EAF2FA' },
-  campo: { es: 'En campo', en: 'In the field', color: '#0E9F6E', bg: '#E9F9F1' },
-  comida: { es: 'En comida', en: 'At lunch', color: '#D97706', bg: '#FDF3E3' },
-  sinReportar: { es: 'Jornada sin iniciar', en: 'Shift not started', color: '#64748B', bg: '#EEF2F6' },
-};
-
-const cardSx = {
-  border: '1px solid',
-  borderColor: 'divider',
-  borderRadius: 3,
-  boxShadow: '0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(10,37,64,.12)',
-};
+const JORNADA_MINUTOS = 9 * 60;
 
 async function updateActivityStatus(userId, status, failureMessage) {
   const token = localStorage.getItem('execon_token');
@@ -65,128 +56,100 @@ async function updateActivityStatus(userId, status, failureMessage) {
     body: JSON.stringify({ estatus: status }),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.message || failureMessage);
+  if (!response.ok) {
+    throw new Error(result.message || failureMessage);
+  }
 }
 
-const pad = (n) => String(n).padStart(2, '0');
-
-function formatClock(totalSecs) {
-  const s = Math.max(0, Math.floor(totalSecs));
-  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+function formatSeconds(totalSecs) {
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 function formatMinutes(minutes) {
   const m = Math.max(0, Math.round(Number(minutes) || 0));
-  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return h > 0 ? `${h}h ${rem}m` : `${rem}m`;
 }
 
-function localDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function incidentStartMs(inc) {
-  if (!inc?.fecha || !inc?.inicio) return null;
-  const ms = new Date(`${inc.fecha}T${inc.inicio}:00`).getTime();
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function readHistory(key) {
-  try {
-    const list = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
-}
-
-const norm = (s) => String(s || '').toUpperCase().replace(/[\s_-]+/g, '');
-
-function PriorityChip({ value, isEnglish }) {
-  const p = PRIORITY[value] || PRIORITY.P3;
-  return (
-    <Chip
-      size="small"
-      label={`${value || 'P3'} · ${isEnglish ? p.en : p.es}`}
-      sx={{ bgcolor: p.bg, color: p.color, fontWeight: 700, borderRadius: 1.5 }}
-    />
-  );
-}
-
-function Info({ label, value }) {
-  return (
-    <Box>
-      <Typography sx={{ color: 'text.secondary', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-        {label}
-      </Typography>
-      <Typography sx={{ fontWeight: 600, fontSize: '0.92rem' }}>{value || '—'}</Typography>
-    </Box>
-  );
-}
-
-function Kpi({ icon, color, value, label }) {
-  return (
-    <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: '#F7F9FC' }}>
-      <Box sx={{ color, display: 'flex', '& svg': { fontSize: 18 } }}>{icon}</Box>
-      <Typography sx={{ fontSize: '1.3rem', fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>{value}</Typography>
-      <Typography sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>{label}</Typography>
-    </Box>
-  );
+function getLocalizedStatus(status, isEnglish) {
+  const normalized = String(status || '').toUpperCase().replace(/[\s_-]+/g, '');
+  if (normalized === 'ENATENCION') return isEnglish ? 'In progress' : 'En atención';
+  if (normalized === 'PENDIENTE') return isEnglish ? 'Pending' : 'Pendiente';
+  if (normalized === 'FINALIZADO') return isEnglish ? 'Completed' : 'Finalizado';
+  return status || (isEnglish ? 'Pending' : 'Pendiente');
 }
 
 export default function IsmMesaDashboardPage() {
-  const { preferences } = usePreferences();
+  const { t, preferences } = usePreferences();
   const isEnglish = preferences.idioma === 'en-US';
-  const tx = useCallback((es, en) => (isEnglish ? en : es), [isEnglish]);
+  const tx = useCallback((spanish, english) => (isEnglish ? english : spanish), [isEnglish]);
 
-  const user = useMemo(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('execon_usuario') || '{}');
-      return stored && typeof stored === 'object' ? stored : {};
-    } catch {
-      return {};
-    }
-  }, []);
-  const userId = user.id;
-  const firstName = String(user.nombreCompleto || user.nombre || '').trim().split(' ')[0];
-  const startKey = `execon_jornada_inicio_${userId}`;
-  const historyKey = `execon_historial_${userId}_${localDateKey()}`;
+  let userStored = {};
+  try {
+    const stored = JSON.parse(localStorage.getItem('execon_usuario') || '{}');
+    userStored = stored && typeof stored === 'object' ? stored : {};
+  } catch {
+    userStored = {};
+  }
+  const userId = userStored.id;
 
-  const [shiftState, setShiftState] = useState('INACTIVO');
-  const [shiftStartMs, setShiftStartMs] = useState(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  // Estados de Jornada y Turno
+  const [shiftState, setShiftState] = useState('INACTIVO'); // 'ACTIVO', 'COMIDA', 'INACTIVO'
+  const [shiftStartTime, setShiftStartTime] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Estados de Incidentes
   const [incidents, setIncidents] = useState([]);
-  const [history, setHistory] = useState(() => readHistory(historyKey));
+  const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [tabIndex, setTabIndex] = useState(0);
   const [message, setMessage] = useState(null);
-  const [newAssignment, setNewAssignment] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [feedback, setFeedback] = useState('');
-  const [busy, setBusy] = useState(false);
-  const knownIds = useRef(null);
 
-  // Reloj
+  // Modal Detalle de Incidente
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [submittingStatus, setSubmittingStatus] = useState(false);
+
+  // Contador de Jornada
   useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+    let interval = null;
+    if (shiftState === 'ACTIVO' || shiftState === 'COMIDA') {
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [shiftState]);
 
   const loadIncidents = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const token = localStorage.getItem('execon_token');
-      const response = await fetch(`${API_URL}/incidentes`, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`${API_URL}/incidentes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const result = await response.json();
-      if (!response.ok || !Array.isArray(result.data)) {
-        throw new Error(result.message || tx('No fue posible cargar los incidentes.', 'Could not load incidents.'));
+      if (!response.ok) throw new Error(result.message || tx('No fue posible cargar los incidentes.', 'Could not load incidents.'));
+      if (!Array.isArray(result.data)) {
+        throw new Error(tx('La respuesta de incidentes no es válida.', 'The incidents response is invalid.'));
       }
       setIncidents(result.data);
     } catch (error) {
-      if (!silent) setMessage({ severity: 'error', text: error.message });
+      if (!silent) setMessage({ severity: 'error', text: error.message || tx('No fue posible cargar los incidentes.', 'Could not load incidents.') });
     } finally {
       if (!silent) setLoading(false);
     }
   }, [tx]);
 
+  useEffect(() => {
+    loadIncidents();
+  }, [loadIncidents]);
+
+  // Lee mi estatus guardado en la base de datos (sobrevive a recargas y otros navegadores)
   const loadOwnStatus = useCallback(async () => {
     if (!userId) return;
     try {
@@ -196,29 +159,33 @@ export default function IsmMesaDashboardPage() {
       if (!response.ok || !Array.isArray(result.data)) return;
       const me = result.data.find((e) => Number(e.id) === Number(userId));
       const saved = String(me?.estatus || '').toLowerCase();
+      const startKey = `execon_jornada_inicio_${userId}`;
       if (saved === 'mesa' || saved === 'campo' || saved === 'comida') {
-        setShiftState(saved === 'comida' ? 'COMIDA' : 'ACTIVO');
+        setShiftState((prev) => {
+          const next = saved === 'comida' ? 'COMIDA' : 'ACTIVO';
+          return prev === next ? prev : next;
+        });
         let start = Number(localStorage.getItem(startKey));
         if (!start) {
           start = me?.actualizadoEn ? new Date(me.actualizadoEn).getTime() : Date.now();
           localStorage.setItem(startKey, String(start));
         }
-        setShiftStartMs(start);
+        setShiftStartTime((prev) => prev || new Date(start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - start) / 1000)));
       } else {
         setShiftState('INACTIVO');
-        setShiftStartMs(null);
         localStorage.removeItem(startKey);
       }
     } catch {
       /* sin conexión: se conserva el estado local */
     }
-  }, [userId, startKey]);
+  }, [userId]);
 
   useEffect(() => {
-    loadIncidents();
     loadOwnStatus();
-  }, [loadIncidents, loadOwnStatus]);
+  }, [loadOwnStatus]);
 
+  // Refresco automático: nuevas asignaciones del distribuidor y estatus propio
   usePolling(
     useCallback(() => {
       loadIncidents(true);
@@ -227,474 +194,527 @@ export default function IsmMesaDashboardPage() {
     8000,
   );
 
-  const mine = useMemo(
-    () => incidents.filter((inc) => Number(inc.idIsmMesa) === Number(userId)),
-    [incidents, userId],
-  );
-  const current = useMemo(() => mine.find((i) => norm(i.estatus) === 'ENATENCION'), [mine]);
-  const queue = useMemo(
-    () =>
-      mine
-        .filter((i) => norm(i.estatus) === 'PENDIENTE')
-        .sort((a, b) => String(a.prioridad).localeCompare(String(b.prioridad)) || a.id - b.id),
-    [mine],
-  );
+  const myIncidents = useMemo(() => {
+    return incidents.filter(
+      (inc) =>
+        Number(inc.id_ism_asignado || inc.idIsmMesa) === Number(userId) ||
+        String(inc.ismMesa || '').toLowerCase() === String(userStored.nombreCompleto || '').toLowerCase(),
+    );
+  }, [incidents, userId, userStored.nombreCompleto]);
 
-  // Aviso de nuevas asignaciones
-  useEffect(() => {
-    const ids = new Set(mine.map((i) => i.id));
-    if (knownIds.current) {
-      const fresh = mine.filter((i) => !knownIds.current.has(i.id) && norm(i.estatus) === 'PENDIENTE');
-      if (fresh.length) setNewAssignment(fresh[0]);
-    }
-    knownIds.current = ids;
-  }, [mine]);
+  const currentOnsite = useMemo(() => {
+    return myIncidents.find((inc) => String(inc.estatus).toUpperCase() === 'EN ATENCION');
+  }, [myIncidents]);
 
-  const ownState = current ? 'campo' : shiftState === 'ACTIVO' ? 'mesa' : shiftState === 'COMIDA' ? 'comida' : 'sinReportar';
-  const stateUi = STATE_UI[ownState];
+  const ownState = currentOnsite
+    ? 'campo'
+    : shiftState === 'ACTIVO'
+      ? 'mesa'
+      : shiftState === 'COMIDA'
+        ? 'comida'
+        : 'sinReportar';
+  const statusCards = [
+    { id: 'mesa', label: t('statusMesa'), value: ownState === 'mesa' ? 1 : 0, color: '#1D6FB8', lightColor: '#EAF2FA', icon: <GroupsOutlined /> },
+    { id: 'campo', label: t('statusCampo'), value: ownState === 'campo' ? 1 : 0, color: '#0E9F6E', lightColor: '#E9F9F1', icon: <LocationOnOutlined /> },
+    { id: 'comida', label: t('statusComida'), value: ownState === 'comida' ? 1 : 0, color: '#D97706', lightColor: '#FDF3E3', icon: <RestaurantOutlined /> },
+    { id: 'proyecto', label: t('statusProyecto'), value: 0, color: '#6D5BB8', lightColor: '#EFEDFA', icon: <BusinessCenterOutlined /> },
+    { id: 'sin-reportar', label: t('statusSinReportar'), value: ownState === 'sinReportar' ? 1 : 0, color: '#C0392B', lightColor: '#FDECEA', icon: <WarningAmberOutlined /> },
+    { id: 'vacaciones', label: t('statusVacaciones'), value: 0, color: '#64748B', lightColor: '#EEF2F6', icon: <WbSunnyOutlined /> },
+  ];
 
-  const elapsedSec = shiftStartMs ? Math.max(0, Math.floor((nowMs - shiftStartMs) / 1000)) : 0;
-  const progress = Math.min(100, Math.round((elapsedSec / 60 / JORNADA_MIN) * 100));
-  const remainingMin = Math.max(0, JORNADA_MIN - Math.floor(elapsedSec / 60));
-  const currentStart = incidentStartMs(current);
-  const onsiteSec = currentStart ? Math.max(0, Math.floor((nowMs - currentStart) / 1000)) : 0;
-  const fieldMinutesToday = history.reduce((sum, h) => sum + (Number(h.minutos) || 0), 0);
-
-  const saveHistory = (entry) => {
-    const next = [entry, ...history];
-    setHistory(next);
-    localStorage.setItem(historyKey, JSON.stringify(next));
-  };
-
-  const errNoSession = tx('No se encontró una sesión válida para actualizar el estado.', 'A valid session is required to update your status.');
-
-  const startShift = async () => {
+  // Turno Handlers
+  const handleStartShift = async () => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     try {
-      await updateActivityStatus(userId, 'mesa', errNoSession);
-    } catch (e) {
-      setMessage({ severity: 'error', text: e.message });
+      await updateActivityStatus(userId, 'mesa', tx('No se encontró una sesión válida para actualizar el estado.', 'A valid session is required to update your status.'));
+    } catch (error) {
+      setMessage({ severity: 'error', text: error.message });
       return;
     }
-    const now = Date.now();
-    localStorage.setItem(startKey, String(now));
-    setShiftStartMs(now);
+    localStorage.setItem(`execon_jornada_inicio_${userId}`, String(now.getTime()));
+    setElapsedSeconds(0);
+    setShiftStartTime(timeStr);
     setShiftState('ACTIVO');
-    setMessage({ severity: 'success', text: tx('Jornada iniciada. Ya apareces disponible en mesa.', 'Shift started. You now show as available at the desk.') });
+    setMessage({ severity: 'success', text: tx(`Jornada iniciada a las ${timeStr}. Estado: Disponible en mesa.`, `Shift started at ${timeStr}. Status: Available at desk.`) });
   };
 
-  const toggleMeal = async () => {
-    const next = shiftState === 'ACTIVO' ? 'COMIDA' : 'ACTIVO';
+  const handleToggleMeal = async () => {
+    const nextState = shiftState === 'ACTIVO' ? 'COMIDA' : 'ACTIVO';
     try {
-      await updateActivityStatus(userId, next === 'COMIDA' ? 'comida' : 'mesa', errNoSession);
-    } catch (e) {
-      setMessage({ severity: 'error', text: e.message });
+      await updateActivityStatus(
+        userId,
+        nextState === 'COMIDA' ? 'comida' : 'mesa',
+        tx('No se encontró una sesión válida para actualizar el estado.', 'A valid session is required to update your status.'),
+      );
+    } catch (error) {
+      setMessage({ severity: 'error', text: error.message });
       return;
     }
-    setShiftState(next);
+    setShiftState(nextState);
+    setMessage({
+      severity: 'info',
+      text: nextState === 'COMIDA' ? tx('Pausa registrada: En hora de comida.', 'Break started: At lunch.') : tx('Reanudado: Disponible en mesa.', 'Resumed: Available at desk.'),
+    });
   };
 
-  const endShift = async () => {
-    if (!window.confirm(tx('¿Confirmas que deseas finalizar tu jornada?', 'Do you want to end your shift?'))) return;
-    try {
-      await updateActivityStatus(userId, 'sin_reportar', tx('No se pudo registrar el fin de la jornada.', 'Could not record the end of your shift.'));
-    } catch (e) {
-      setMessage({ severity: 'error', text: e.message });
-      return;
+  const handleEndShift = async () => {
+    if (window.confirm(tx('¿Confirmas que deseas finalizar tu turno de 9 horas?', 'Are you sure you want to end your 9-hour shift?'))) {
+      try {
+        await updateActivityStatus(userId, 'sin_reportar', tx('No se pudo registrar el fin de la jornada.', 'Could not record the end of your shift.'));
+      } catch (error) {
+        setMessage({ severity: 'error', text: error.message });
+        return;
+      }
+      localStorage.removeItem(`execon_jornada_inicio_${userId}`);
+      setShiftState('INACTIVO');
+      setMessage({ severity: 'warning', text: tx('Turno finalizado con éxito.', 'Shift ended successfully.') });
     }
-    localStorage.removeItem(startKey);
-    setShiftState('INACTIVO');
-    setShiftStartMs(null);
-    setMessage({ severity: 'info', text: tx('Jornada finalizada.', 'Shift ended.') });
   };
 
-  const updateIncident = async (inc, newStatus, text) => {
-    setBusy(true);
-    const endStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  // Abrir Detalle de Incidente
+  const handleOpenDetail = (inc) => {
+    setSelectedIncident(inc);
+    setFeedbackText(inc.retroalimentacion || inc.solucion || '');
+  };
+
+  // Cambiar Estatus o Concluir Incidente con Retroalimentación
+  const handleUpdateIncidentStatus = async (newStatus) => {
+    if (!selectedIncident) return;
+    setSubmittingStatus(true);
+    const endTime = new Date();
+    const endTimeStr = endTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+
     try {
       const token = localStorage.getItem('execon_token');
-      const base = inc.descripcion || inc.resumen || '';
-      const response = await fetch(`${API_URL}/incidentes/${inc.id}`, {
+      const putResponse = await fetch(`${API_URL}/incidentes/${selectedIncident.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           estatus: newStatus,
-          fin: newStatus === 'FINALIZADO' ? endStr : undefined,
+          fin: newStatus === 'FINALIZADO' ? endTimeStr : undefined,
           idIsmAsignado: newStatus === 'FINALIZADO' ? null : userId,
-          descripcion: text ? `${base}\n[Retroalimentación]: ${text}` : inc.descripcion,
+          descripcion: feedbackText ? `${selectedIncident.descripcion || selectedIncident.resumen}\n[Retroalimentación]: ${feedbackText}` : selectedIncident.descripcion,
         }),
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || tx('No se pudo actualizar el incidente.', 'Could not update the incident.'));
+      const putResult = await putResponse.json().catch(() => ({}));
+      if (!putResponse.ok) {
+        throw new Error(putResult.message || tx('No se pudo actualizar el incidente.', 'Could not update the incident.'));
+      }
 
       if (newStatus === 'FINALIZADO') {
-        const start = incidentStartMs(inc);
-        saveHistory({
-          id: inc.id,
-          folio: inc.folio,
-          resumen: inc.incidente || inc.resumen,
-          cliente: inc.compania,
-          ubicacion: inc.ubicacion,
-          inicio: inc.inicio,
-          fin: endStr,
-          minutos: start ? Math.max(1, Math.round((Date.now() - start) / 60000)) : 0,
-        });
-        setFeedback('');
+        const newLog = {
+          id: selectedIncident.id,
+          folio: selectedIncident.folio,
+          resumen: selectedIncident.incidente || selectedIncident.resumen,
+          cliente: selectedIncident.compania || selectedIncident.clienteNombre || 'Cliente General',
+          inicio: selectedIncident.inicio || '09:00',
+          fin: endTimeStr,
+          duracion: selectedIncident.duracionMinutos ? formatMinutes(selectedIncident.duracionMinutos) : '1h 30m',
+          fecha: new Date().toISOString().split('T')[0],
+        };
+        setActivityLogs((prev) => [newLog, ...prev]);
+
+        // El backend ya regresa al ISM a "mesa" al finalizar; aquí solo se refleja en pantalla
         setShiftState((prev) => (prev === 'INACTIVO' ? 'ACTIVO' : prev));
       }
+
       setMessage({
         severity: 'success',
-        text: newStatus === 'FINALIZADO'
-          ? tx(`Onsite ${inc.folio} concluido. Vuelves a estar disponible.`, `Onsite ${inc.folio} completed. You are available again.`)
-          : tx(`Atención de ${inc.folio} iniciada.`, `Attention to ${inc.folio} started.`),
+        text: tx(
+          `Incidente #${selectedIncident.folio} actualizado a: ${getLocalizedStatus(newStatus, false)}`,
+          `Incident #${selectedIncident.folio} updated to: ${getLocalizedStatus(newStatus, true)}`,
+        ),
       });
-      setSelected(null);
-      setNewAssignment(null);
-      loadIncidents(true);
-    } catch (e) {
-      setMessage({ severity: 'error', text: e.message });
+
+      setSelectedIncident(null);
+      loadIncidents();
+    } catch (error) {
+      setMessage({ severity: 'error', text: error.message || tx('No se pudo actualizar el incidente.', 'Could not update the incident.') });
     } finally {
-      setBusy(false);
+      setSubmittingStatus(false);
     }
   };
 
-  const canStartIncident = shiftState === 'ACTIVO' && !current;
-  const startBlockedReason = current
-    ? tx('Ya tienes un onsite en curso', 'You already have an onsite in progress')
-    : shiftState === 'COMIDA'
-      ? tx('Termina tu comida primero', 'Finish your break first')
-      : tx('Inicia tu jornada primero', 'Start your shift first');
-
-  const startTime = shiftStartMs
-    ? new Date(shiftStartMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '';
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  const progressPercent = Math.min(100, Math.round((elapsedMinutes / JORNADA_MINUTOS) * 100));
+  const shiftStatusLabel = ownState === 'mesa'
+    ? tx('En mesa (Disponible)', 'At desk (Available)')
+    : ownState === 'campo'
+      ? tx('En campo', 'In field')
+      : ownState === 'comida'
+        ? tx('En comida', 'At lunch')
+        : tx('Fuera de turno', 'Off shift');
 
   return (
     <IsmLayout>
-      <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
+      <Box sx={{ pb: 2 }}>
         {message && (
-          <Alert severity={message.severity} onClose={() => setMessage(null)} sx={{ mb: 2, borderRadius: 2 }}>
+          <Alert severity={message.severity} onClose={() => setMessage(null)} sx={{ mb: 2 }}>
             {message.text}
           </Alert>
         )}
 
-        {newAssignment && (
-          <Alert
-            icon={<NotificationsActiveOutlined />}
-            severity="warning"
-            sx={{ mb: 2, borderRadius: 2, alignItems: 'center' }}
-            onClose={() => setNewAssignment(null)}
-            action={
-              <Button color="inherit" size="small" onClick={() => { setSelected(newAssignment); setFeedback(''); }}>
-                {tx('Ver', 'View')}
-              </Button>
-            }
-          >
-            {tx('Te asignaron un nuevo onsite:', 'You were assigned a new onsite:')} <b>{newAssignment.folio}</b> · {newAssignment.ubicacion}
-          </Alert>
+        <StatusSummaryCards cards={statusCards} />
+
+        {loading && (
+          <CircularProgress
+            size={18}
+            aria-label={tx('Cargando incidentes', 'Loading incidents')}
+            sx={{ mb: 1 }}
+          />
         )}
 
-        {/* Cabecera de jornada */}
         <Paper
           sx={{
-            ...cardSx,
-            p: { xs: 2.25, md: 3 },
-            mb: 2.5,
-            color: '#fff',
-            border: 'none',
-            background: 'linear-gradient(135deg, #003359 0%, #145A86 100%)',
+            p: { xs: 1.25, sm: 1.5 },
+            mb: 1.5,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
           }}
         >
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ minWidth: 220 }}>
-              <Typography sx={{ opacity: 0.8, fontSize: '0.85rem' }}>
-                {tx('Hola', 'Hello')}{firstName ? `, ${firstName}` : ''}
-              </Typography>
-              <Chip
-                icon={ownState === 'campo' ? <LocationOnOutlined /> : ownState === 'comida' ? <RestaurantOutlined /> : <WorkOutlineOutlined />}
-                label={isEnglish ? stateUi.en : stateUi.es}
-                sx={{ mt: 0.75, bgcolor: stateUi.bg, color: stateUi.color, fontWeight: 700, '& .MuiChip-icon': { color: stateUi.color } }}
-              />
-            </Box>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+              <Avatar
+                sx={{
+                  width: 34,
+                  height: 34,
+                  bgcolor: ownState === 'mesa' ? '#EAF2FA' : ownState === 'comida' ? '#FDF3E3' : ownState === 'campo' ? '#E9F9F1' : '#F1F5F9',
+                  color: ownState === 'mesa' ? '#1D6FB8' : ownState === 'comida' ? '#D97706' : ownState === 'campo' ? '#0E9F6E' : '#64748B',
+                }}
+              >
+                <ScheduleOutlined fontSize="small" />
+              </Avatar>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography sx={{ fontSize: '0.82rem', fontWeight: 800, color: 'text.primary' }}>
+                  {tx('Jornada', 'Work shift')} · {shiftStatusLabel}
+                </Typography>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.35 }}>
+                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 800, color: '#173B66', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatSeconds(elapsedSeconds)} / 09:00:00
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={progressPercent}
+                    sx={{
+                      width: { xs: 84, sm: 120 },
+                      height: 5,
+                      borderRadius: 4,
+                      bgcolor: '#E2E8F0',
+                      '& .MuiLinearProgress-bar': { bgcolor: '#0F9D58' },
+                    }}
+                  />
+                  <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: 'text.secondary' }}>
+                    {progressPercent}%
+                  </Typography>
+                  {shiftStartTime && (
+                    <Typography sx={{ display: { xs: 'none', md: 'block' }, fontSize: '0.72rem', color: 'text.secondary' }}>
+                      {tx(`Inicio ${shiftStartTime}`, `Started ${shiftStartTime}`)}
+                    </Typography>
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
 
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography sx={{ fontSize: { xs: '2.2rem', md: '2.8rem' }, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {formatClock(elapsedSec)}
-              </Typography>
-              <Typography sx={{ opacity: 0.75, fontSize: '0.8rem', mt: 0.5 }}>
-                {shiftStartMs
-                  ? tx(`Inicio ${startTime} · faltan ${formatMinutes(remainingMin)}`, `Started ${startTime} · ${formatMinutes(remainingMin)} left`)
-                  : tx('Aún no inicias tu jornada de 9 h', 'Your 9 h shift has not started')}
-              </Typography>
-            </Box>
-
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
               {shiftState === 'INACTIVO' ? (
-                <Button size="large" variant="contained" color="secondary" startIcon={<PlayArrowOutlined />} onClick={startShift} sx={{ fontWeight: 700 }}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<PlayArrowOutlined />}
+                  onClick={handleStartShift}
+                  sx={{ bgcolor: '#003359', fontWeight: 800, textTransform: 'none', px: 1.5 }}
+                >
                   {tx('Iniciar jornada', 'Start shift')}
                 </Button>
               ) : (
                 <>
-                  <Tooltip title={current ? tx('No puedes pausar con un onsite en curso', 'You cannot pause during an onsite') : ''}>
-                    <span>
-                      <Button
-                        variant="contained"
-                        disabled={Boolean(current)}
-                        startIcon={<RestaurantOutlined />}
-                        onClick={toggleMeal}
-                        sx={{ bgcolor: '#fff', color: '#003359', '&:hover': { bgcolor: '#E8EEF4' } }}
-                      >
-                        {shiftState === 'COMIDA' ? tx('Terminar comida', 'End break') : tx('Salir a comer', 'Lunch break')}
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip title={current ? tx('Concluye tu onsite antes de salir', 'Complete your onsite before leaving') : ''}>
-                    <span>
-                      <Button
-                        variant="outlined"
-                        disabled={Boolean(current)}
-                        startIcon={<StopOutlined />}
-                        onClick={endShift}
-                        sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.5)', '&:hover': { borderColor: '#fff' } }}
-                      >
-                        {tx('Finalizar jornada', 'End shift')}
-                      </Button>
-                    </span>
-                  </Tooltip>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<RestaurantOutlined />}
+                    onClick={handleToggleMeal}
+                    sx={{
+                      fontWeight: 700,
+                      textTransform: 'none',
+                      borderColor: shiftState === 'COMIDA' ? '#0F9D58' : '#F29900',
+                      color: shiftState === 'COMIDA' ? '#0F9D58' : '#B76B00',
+                    }}
+                  >
+                    {shiftState === 'COMIDA' ? tx('Reanudar', 'Resume') : tx('Pausa comida', 'Meal break')}
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="text"
+                    color="error"
+                    startIcon={<StopOutlined />}
+                    onClick={handleEndShift}
+                    sx={{ fontWeight: 700, textTransform: 'none' }}
+                  >
+                    {tx('Finalizar', 'End shift')}
+                  </Button>
                 </>
               )}
             </Stack>
-          </Box>
-          <LinearProgress
-            variant="determinate"
-            value={progress}
-            sx={{ mt: 2.5, height: 6, borderRadius: 3, bgcolor: 'rgba(255,255,255,.2)', '& .MuiLinearProgress-bar': { bgcolor: '#8CC63F' } }}
-          />
+          </Stack>
         </Paper>
 
-        <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) 340px' }, alignItems: 'start' }}>
-          <Stack spacing={2.5}>
-            {current ? (
-              <Paper sx={{ ...cardSx, p: 3, borderColor: '#0E9F6E', borderWidth: 2 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1}>
-                  <Box>
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                      <Chip size="small" label={tx('ONSITE EN CURSO', 'ONSITE IN PROGRESS')} sx={{ bgcolor: '#E9F9F1', color: '#0E9F6E', fontWeight: 800 }} />
-                      <PriorityChip value={current.prioridad} isEnglish={isEnglish} />
-                      <Typography sx={{ color: 'text.secondary', fontSize: '0.85rem', fontWeight: 600 }}>{current.folio}</Typography>
-                    </Stack>
-                    <Typography variant="h5" sx={{ mt: 1.25 }}>{current.incidente}</Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Typography sx={{ fontSize: '1.9rem', fontWeight: 700, color: '#0E9F6E', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                      {formatClock(onsiteSec)}
-                    </Typography>
-                    <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>{tx('tiempo en sitio', 'time on site')}</Typography>
-                  </Box>
-                </Stack>
-
-                <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, mt: 2.5 }}>
-                  <Info label={tx('Cliente', 'Client')} value={current.compania} />
-                  <Info label={tx('Ubicación', 'Location')} value={current.ubicacion} />
-                  <Info label={tx('Asignado por', 'Assigned by')} value={current.asignadoPor} />
-                </Box>
-
-                {current.descripcion && (
-                  <Typography sx={{ mt: 2, color: 'text.secondary', fontSize: '0.9rem', whiteSpace: 'pre-line' }}>
-                    {current.descripcion}
+        {currentOnsite && (
+          <Card sx={{ mb: 1.5, border: '1px solid #B7D7F3', borderRadius: 2, bgcolor: '#F8FBFF' }}>
+            <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1.5}
+                sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Chip label={tx('ONSITE EN CURSO', 'ONSITE IN PROGRESS')} color="primary" size="small" sx={{ fontWeight: 800, mb: 0.4 }} />
+                  <Typography sx={{ fontSize: '0.9rem', fontWeight: 800, color: '#173B66' }}>
+                    {tx('Folio', 'Ticket')} #{currentOnsite.folio} · {currentOnsite.incidente || currentOnsite.resumen}
                   </Typography>
-                )}
-
-                <TextField
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  sx={{ mt: 2.5 }}
-                  label={tx('Retroalimentación / solución aplicada', 'Feedback / solution applied')}
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                />
+                  <Typography sx={{ fontSize: '0.75rem', color: '#64748B', mt: 0.2 }}>
+                    {tx('Ubicación', 'Location')}: {currentOnsite.ubicacion || tx('CEDIS Principal', 'Main distribution center')}
+                  </Typography>
+                </Box>
                 <Button
-                  fullWidth
-                  size="large"
+                  size="small"
                   variant="contained"
                   color="success"
-                  disabled={busy || feedback.trim().length < 5}
-                  startIcon={busy ? <CircularProgress size={18} color="inherit" /> : <CheckCircleOutlined />}
-                  onClick={() => updateIncident(current, 'FINALIZADO', feedback.trim())}
-                  sx={{ mt: 1.5, fontWeight: 700 }}
+                  onClick={() => handleOpenDetail(currentOnsite)}
+                  sx={{ fontWeight: 800, textTransform: 'none', flexShrink: 0 }}
                 >
-                  {tx('Concluir onsite', 'Complete onsite')}
+                  {tx('Ver detalle / Concluir', 'View details / Complete')}
                 </Button>
-                {feedback.trim().length < 5 && (
-                  <Typography sx={{ mt: 0.75, fontSize: '0.75rem', color: 'text.secondary', textAlign: 'center' }}>
-                    {tx('Escribe qué se hizo para poder concluir.', 'Describe what was done to complete it.')}
-                  </Typography>
-                )}
-              </Paper>
-            ) : (
-              <Paper sx={{ ...cardSx, p: 3.5, textAlign: 'center', bgcolor: '#FAFCFE' }}>
-                <Box sx={{ width: 56, height: 56, mx: 'auto', mb: 1.5, display: 'grid', placeItems: 'center', borderRadius: '50%', bgcolor: stateUi.bg, color: stateUi.color }}>
-                  <WorkOutlineOutlined />
-                </Box>
-                <Typography variant="h6" sx={{ color: '#003359', fontWeight: 700 }}>
-                  {shiftState === 'INACTIVO'
-                    ? tx('Inicia tu jornada para recibir onsites', 'Start your shift to receive onsites')
-                    : shiftState === 'COMIDA'
-                      ? tx('Estás en tu pausa de comida', 'You are on your lunch break')
-                      : queue.length
-                        ? tx('Tienes onsites esperando', 'You have onsites waiting')
-                        : tx('Disponible · esperando asignación', 'Available · waiting for assignment')}
-                </Typography>
-                <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9rem' }}>
-                  {queue.length
-                    ? tx(`Tienes ${queue.length} en cola. Elige uno para comenzar.`, `You have ${queue.length} in queue. Pick one to start.`)
-                    : tx('Esta pantalla se actualiza sola cuando el distribuidor te asigne uno.', 'This screen updates automatically when the dispatcher assigns one.')}
-                </Typography>
-              </Paper>
-            )}
-
-            <Paper sx={{ ...cardSx, p: { xs: 2, md: 2.5 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#003359' }}>
-                  {tx('Mi cola de onsites', 'My onsite queue')}
-                </Typography>
-                <Chip size="small" label={queue.length} sx={{ fontWeight: 700 }} />
               </Stack>
+            </CardContent>
+          </Card>
+        )}
 
-              {loading ? (
-                <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={26} /></Box>
-              ) : queue.length === 0 ? (
-                <Typography sx={{ color: 'text.secondary', py: 2, fontSize: '0.9rem' }}>
-                  {tx('No tienes onsites pendientes.', 'You have no pending onsites.')}
-                </Typography>
-              ) : (
-                <Stack spacing={1.25}>
-                  {queue.map((inc) => {
-                    const p = PRIORITY[inc.prioridad] || PRIORITY.P3;
-                    return (
-                      <Box
-                        key={inc.id}
-                        sx={{
-                          display: 'flex',
-                          gap: 1.5,
-                          alignItems: 'center',
-                          flexWrap: 'wrap',
-                          p: 1.5,
-                          borderRadius: 2.5,
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          borderLeft: `5px solid ${p.color}`,
-                        }}
-                      >
-                        <Box sx={{ flex: 1, minWidth: 220, cursor: 'pointer' }} onClick={() => { setSelected(inc); setFeedback(''); }}>
-                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                            <PriorityChip value={inc.prioridad} isEnglish={isEnglish} />
-                            <Typography sx={{ fontSize: '0.78rem', color: 'text.secondary', fontWeight: 600 }}>{inc.folio}</Typography>
-                          </Stack>
-                          <Typography sx={{ fontWeight: 600, mt: 0.5 }}>{inc.incidente}</Typography>
-                          <Typography sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
-                            {inc.compania} · {inc.ubicacion}
-                          </Typography>
-                        </Box>
-                        <Button size="small" variant="text" onClick={() => { setSelected(inc); setFeedback(''); }}>
-                          {tx('Detalle', 'Details')}
-                        </Button>
-                        <Tooltip title={canStartIncident ? '' : startBlockedReason}>
-                          <span>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              disabled={!canStartIncident || busy}
-                              startIcon={<PlayArrowOutlined />}
-                              onClick={() => updateIncident(inc, 'EN ATENCION', '')}
-                            >
-                              {tx('Iniciar', 'Start')}
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      </Box>
-                    );
-                  })}
-                </Stack>
-              )}
-            </Paper>
-          </Stack>
+        <Paper sx={{ border: '1px solid #E7EDF4', borderRadius: 2, p: { xs: 1.25, sm: 1.75 }, mb: 1.5 }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={0.5}
+              sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 0.75 }}
+            >
+              <Typography sx={{ color: '#173B66', fontSize: '0.95rem', fontWeight: 800 }}>
+              {tx('Mis incidentes y cola de servicio', 'My incidents and service queue')}
+              </Typography>
+              <Typography sx={{ color: '#64748B', fontSize: '0.75rem' }}>
+                {tx('Selecciona un incidente para consultar o actualizar.', 'Select an incident to view or update.')}
+              </Typography>
+            </Stack>
 
-          <Stack spacing={2.5}>
-            <Paper sx={{ ...cardSx, p: 2.25 }}>
-              <Typography sx={{ fontWeight: 700, color: '#003359', mb: 1.5 }}>{tx('Mi día', 'My day')}</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25 }}>
-                <Kpi icon={<CheckCircleOutlined />} color="#0E9F6E" value={history.length} label={tx('Concluidos', 'Completed')} />
-                <Kpi icon={<WorkOutlineOutlined />} color="#D97706" value={queue.length} label={tx('En cola', 'Queued')} />
-                <Kpi icon={<TimerOutlined />} color="#1D6FB8" value={formatMinutes(fieldMinutesToday)} label={tx('En campo', 'In field')} />
-                <Kpi icon={<HistoryOutlined />} color="#6D5BB8" value={`${progress}%`} label={tx('Jornada', 'Shift')} />
+            <Tabs
+              value={tabIndex}
+              onChange={(_, val) => setTabIndex(val)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{ mb: 1, minHeight: 36, borderBottom: '1px solid #E7EDF4', '& .MuiTabs-indicator': { bgcolor: '#003359' }, '& .MuiTab-root': { minHeight: 36, py: 0.5 } }}
+            >
+              <Tab label={`${tx('Asignados', 'Assigned')} (${myIncidents.length})`} sx={{ fontWeight: 800, textTransform: 'none' }} />
+              <Tab label={`${tx('Cola general', 'All incidents')} (${incidents.length})`} sx={{ fontWeight: 800, textTransform: 'none' }} />
+            </Tabs>
+
+            <Box sx={{ overflowX: 'auto' }}>
+              <Box component="table" sx={{ width: '100%', minWidth: 800, borderCollapse: 'collapse', '& th': { py: 1.25, px: 2, textAlign: 'left', bgcolor: '#F8FAFC', color: '#64748B', fontSize: '0.78rem', fontWeight: 800, borderBottom: '1px solid #E7EDF4' }, '& td': { py: 1.2, px: 2, color: '#334155', fontSize: '0.84rem', borderBottom: '1px solid #EEF2F6' } }}>
+                <thead>
+                  <tr>
+                    <th>{tx('Folio', 'Ticket')}</th>
+                    <th>{tx('Prioridad', 'Priority')}</th>
+                    <th>{tx('Resumen del incidente', 'Incident summary')}</th>
+                    <th>{tx('Cliente / Compañía', 'Customer / Company')}</th>
+                    <th>{tx('Plaza / Ubicación', 'Branch / Location')}</th>
+                    <th>{tx('Estatus', 'Status')}</th>
+                    <th>{tx('Acción', 'Action')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(tabIndex === 0 ? myIncidents : incidents).length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: '#94A3B8' }}>
+                        {tx('No hay incidentes disponibles en esta sección.', 'No incidents are available in this section.')}
+                      </td>
+                    </tr>
+                  ) : (
+                    (tabIndex === 0 ? myIncidents : incidents).map((inc) => (
+                      <tr key={inc.id ?? inc.folio}>
+                        <td style={{ fontWeight: 800, color: '#173B66' }}>{inc.folio}</td>
+                        <td>
+                          <Chip size="small" label={inc.prioridad || 'P3'} sx={{ fontWeight: 800, bgcolor: inc.prioridad === 'P1' ? '#FEE2E2' : '#F1F5F9' }} />
+                        </td>
+                        <td>{inc.incidente || inc.resumen}</td>
+                        <td>{inc.compania || inc.clienteNombre || tx('Cliente General', 'General customer')}</td>
+                        <td>{inc.ubicacion || tx('CEDIS Principal', 'Main distribution center')}</td>
+                        <td>
+                          <Chip size="small" label={getLocalizedStatus(inc.estatus, isEnglish)} sx={{ bgcolor: inc.estatus === 'EN ATENCION' ? '#ECFDF3' : '#FFF7ED', color: inc.estatus === 'EN ATENCION' ? '#168A4A' : '#C2410C', fontWeight: 800 }} />
+                        </td>
+                        <td>
+                          <Button size="small" variant="contained" onClick={() => handleOpenDetail(inc)} sx={{ textTransform: 'none', fontWeight: 800, bgcolor: '#003359' }}>
+                            {tx('Abrir', 'Open')}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
               </Box>
-            </Paper>
+            </Box>
+        </Paper>
 
-            <Paper sx={{ ...cardSx, p: 2.25 }}>
-              <Typography sx={{ fontWeight: 700, color: '#003359', mb: 1.5 }}>{tx('Historial de hoy', "Today's history")}</Typography>
-              {history.length === 0 ? (
-                <Typography sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
-                  {tx('Aquí verás los onsites que concluyas hoy.', "You'll see the onsites you complete today here.")}
-                </Typography>
-              ) : (
-                <Stack spacing={1.25}>
-                  {history.map((h) => (
-                    <Box key={h.id} sx={{ pl: 1.5, borderLeft: '3px solid #8CC63F' }}>
-                      <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>{h.folio} · {h.resumen}</Typography>
-                      <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                        {h.cliente} · {h.inicio}–{h.fin} · {formatMinutes(h.minutos)}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-            </Paper>
-          </Stack>
-        </Box>
-      </Box>
+        <Paper sx={{ border: '1px solid #E7EDF4', borderRadius: 2, p: { xs: 1.25, sm: 1.75 } }}>
+            <Typography sx={{ color: '#173B66', fontSize: '0.95rem', fontWeight: 800, mb: 0.35 }}>
+              {tx('Duración de actividades', 'Activity duration')}
+            </Typography>
+            <Typography sx={{ color: '#64748B', fontSize: '0.75rem', mb: 1 }}>
+              {tx('Historial cronológico de servicios atendidos, con horas y tiempo invertido.', 'Chronological service history, including start/end times and time spent.')}
+            </Typography>
 
-      <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} fullWidth maxWidth="sm">
-        {selected && (
-          <>
-            <DialogTitle>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <PriorityChip value={selected.prioridad} isEnglish={isEnglish} />
-                <span>{selected.folio}</span>
-              </Stack>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Box component="table" sx={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', '& th': { py: 0.9, px: 1.25, textAlign: 'left', bgcolor: '#F8FAFC', color: '#64748B', fontSize: '0.74rem', fontWeight: 800, borderBottom: '1px solid #E7EDF4' }, '& td': { py: 0.85, px: 1.25, color: '#334155', fontSize: '0.8rem', borderBottom: '1px solid #EEF2F6' } }}>
+                <thead>
+                  <tr>
+                    <th>{tx('Fecha', 'Date')}</th>
+                    <th>{tx('Folio', 'Ticket')}</th>
+                    <th>{tx('Cliente / Compañía', 'Customer / Company')}</th>
+                    <th>{tx('Hora de inicio', 'Start time')}</th>
+                    <th>{tx('Hora de fin', 'End time')}</th>
+                    <th>{tx('Tiempo invertido', 'Time spent')}</th>
+                    <th>{tx('Estatus', 'Status')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myIncidents.filter((i) => i.estatus === 'FINALIZADO').length === 0 && activityLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: '#94A3B8' }}>
+                      <AccessTimeOutlined sx={{ fontSize: 28, mb: 0.5, color: '#CBD5E1' }} />
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.82rem', color: '#475569' }}>
+                          {tx('Aún no has concluido ninguna actividad hoy.', 'You have not completed any activities today.')}
+                        </Typography>
+                      </td>
+                    </tr>
+                  ) : (
+                    (activityLogs.length > 0 ? activityLogs : myIncidents.filter((i) => i.estatus === 'FINALIZADO')).map((log, idx) => (
+                      <tr key={log.id ?? idx}>
+                        <td>{log.fecha || tx('Hoy', 'Today')}</td>
+                        <td style={{ fontWeight: 800, color: '#173B66' }}>{log.folio}</td>
+                        <td>{log.compania || log.cliente || tx('Cliente General', 'General customer')}</td>
+                        <td style={{ fontWeight: 700, color: '#168A4A' }}>{log.inicio || '09:00'}</td>
+                        <td style={{ fontWeight: 700, color: '#C2410C' }}>{log.fin || '10:45'}</td>
+                        <td>
+                          <Chip size="small" label={log.duracion || (log.duracionMinutos ? formatMinutes(log.duracionMinutos) : '1h 30m')} sx={{ fontWeight: 800, bgcolor: '#F1F5F9', color: '#003359' }} />
+                        </td>
+                        <td>
+                          <Chip size="small" label={tx('Concluido', 'Completed')} color="success" sx={{ fontWeight: 800 }} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Box>
+            </Box>
+        </Paper>
+
+        {/* =========================================================
+            MODAL DE DETALLE COMPLETO Y RETROALIMENTACIÓN
+            ========================================================= */}
+        {selectedIncident && (
+          <Dialog open={Boolean(selectedIncident)} onClose={() => setSelectedIncident(null)} maxWidth="md" fullWidth>
+            <DialogTitle sx={{ fontWeight: 900, color: '#173B66' }}>
+              {tx('Detalle del incidente', 'Incident details')} #{selectedIncident.folio}
             </DialogTitle>
             <DialogContent dividers>
-              <Typography sx={{ fontWeight: 700, mb: 1.5 }}>{selected.incidente}</Typography>
-              <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: '1fr 1fr', mb: 2 }}>
-                <Info label={tx('Cliente', 'Client')} value={selected.compania} />
-                <Info label={tx('Ubicación', 'Location')} value={selected.ubicacion} />
-                <Info label={tx('Asignado por', 'Assigned by')} value={selected.asignadoPor} />
-                <Info label={tx('Registrado', 'Logged')} value={`${selected.fecha} ${selected.inicio}`} />
-              </Box>
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem', whiteSpace: 'pre-line' }}>
-                {selected.descripcion || selected.resumen || tx('Sin descripción.', 'No description.')}
-              </Typography>
+              <Stack spacing={2.5}>
+                {/* 1. Datos del Cliente y Ubicación */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <Paper sx={{ p: 1.5, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 1.5 }}>
+                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B' }}>{tx('CLIENTE / COMPAÑÍA', 'CUSTOMER / COMPANY')}</Typography>
+                    <Typography sx={{ fontSize: '0.95rem', fontWeight: 800, color: '#173B66', mt: 0.3 }}>
+                      {selectedIncident.compania || selectedIncident.clienteNombre || tx('ENERGIA EOLICA DEL SUR', 'SOUTHERN WIND ENERGY')}
+                    </Typography>
+                  </Paper>
+                  <Paper sx={{ p: 1.5, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 1.5 }}>
+                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748B' }}>{tx('PLAZA / UBICACIÓN EXACTA', 'BRANCH / EXACT LOCATION')}</Typography>
+                    <Typography sx={{ fontSize: '0.95rem', fontWeight: 800, color: '#173B66', mt: 0.3, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <LocationOnOutlined sx={{ fontSize: 18, color: '#1A73E8' }} /> {selectedIncident.ubicacion || selectedIncident.nombreSitio || tx('CEDIS Principal', 'Main distribution center')}
+                    </Typography>
+                  </Paper>
+                </Box>
+
+                {/* 2. Contacto para hablar con el cliente */}
+                <Paper sx={{ p: 2, bgcolor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 1.5 }}>
+                  <Typography sx={{ fontSize: '0.8rem', fontWeight: 800, color: '#166534', mb: 1 }}>
+                    {tx('CONTACTO DE SITIO', 'SITE CONTACT')}
+                  </Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
+                    <Typography sx={{ fontSize: '0.86rem', color: '#15803D', display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                      <PhoneOutlined sx={{ fontSize: 18 }} /> {tx('Tel:', 'Phone:')} +52 81 2345 6789
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.86rem', color: '#15803D', display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                      <EmailOutlined sx={{ fontSize: 18 }} /> contacto@cliente.com
+                    </Typography>
+                  </Stack>
+                </Paper>
+
+                {/* 3. Descripción Técnica */}
+                <Box>
+                  <Typography sx={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569', mb: 0.5 }}>
+                    {tx('DESCRIPCIÓN DEL PROBLEMA', 'ISSUE DESCRIPTION')}
+                  </Typography>
+                  <Paper sx={{ p: 1.5, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 1.5 }}>
+                    <Typography sx={{ fontSize: '0.9rem', color: '#334155' }}>
+                      {selectedIncident.descripcion || selectedIncident.incidente || selectedIncident.resumen}
+                    </Typography>
+                  </Paper>
+                </Box>
+
+                {/* 4. Campo de Retroalimentación / Solución Aplicada */}
+                <TextField
+                  label={tx('Retroalimentación / Solución técnica aplicada por ISM/MESA', 'ISM/Desk feedback / technical resolution')}
+                  placeholder={tx('Escribe las acciones realizadas, equipo reemplazado o solución aplicada...', 'Describe the actions taken, replacement equipment, or resolution...')}
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  multiline
+                  minRows={3}
+                  fullWidth
+                />
+              </Stack>
             </DialogContent>
-            <DialogActions sx={{ p: 2 }}>
-              <Button onClick={() => setSelected(null)}>{tx('Cerrar', 'Close')}</Button>
-              {norm(selected.estatus) === 'PENDIENTE' && (
-                <Tooltip title={canStartIncident ? '' : startBlockedReason}>
-                  <span>
-                    <Button
-                      variant="contained"
-                      disabled={!canStartIncident || busy}
-                      startIcon={<PlayArrowOutlined />}
-                      onClick={() => updateIncident(selected, 'EN ATENCION', '')}
-                    >
-                      {tx('Iniciar atención', 'Start attention')}
-                    </Button>
-                  </span>
-                </Tooltip>
-              )}
+
+            <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+              <Button onClick={() => setSelectedIncident(null)} disabled={submittingStatus}>
+                {tx('Cerrar', 'Close')}
+              </Button>
+
+              <Stack direction="row" spacing={1.5}>
+                {selectedIncident.estatus !== 'EN ATENCION' && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleUpdateIncidentStatus('EN ATENCION')}
+                    disabled={submittingStatus}
+                    sx={{ fontWeight: 800, textTransform: 'none' }}
+                  >
+                    {tx('Marcar: En atención', 'Mark as in progress')}
+                  </Button>
+                )}
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => handleUpdateIncidentStatus('FINALIZADO')}
+                  disabled={submittingStatus}
+                  sx={{ fontWeight: 800, textTransform: 'none', px: 2.5 }}
+                >
+                  {tx('Concluir servicio y liberar', 'Complete service and release')}
+                </Button>
+              </Stack>
             </DialogActions>
-          </>
+          </Dialog>
         )}
-      </Dialog>
+      </Box>
     </IsmLayout>
   );
 }
